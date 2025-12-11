@@ -2,100 +2,380 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Industrial Robot Simulator v3.0</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Pro Industrial Robot Simulator v4.0</title>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <style>
-        /* --- UI Styling: Dark Sci-Fi Theme --- */
-        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; }
-        
-        #canvas-container { width: 100vw; height: 100vh; display: block; }
 
-        /* General Panel Style */
+    <style>
+        /* --- グローバルスタイル --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0a0e14;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: #e6e6e6;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        /* --- パネルスタイル（モバイル最適化） --- */
         .panel {
             position: absolute;
-            background: rgba(16, 24, 32, 0.85); /* Deep Blue-Black */
-            backdrop-filter: blur(8px);
-            border: 1px solid #334455;
-            border-left: 4px solid #00ddee; /* Cyan Accent */
-            border-radius: 4px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-            transition: opacity 0.3s;
+            background: rgba(12, 18, 26, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 221, 238, 0.2);
+            border-left: 3px solid #00ddee;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
         }
 
-        h3 { margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; color: #00ddee; letter-spacing: 1.5px; border-bottom: 1px solid #334455; padding-bottom: 5px; }
-        
-        /* Left Control Panel */
-        #controls { top: 20px; left: 20px; width: 260px; }
-        
-        label { font-size: 11px; color: #aaa; display: block; margin-top: 12px; letter-spacing: 0.5px; }
-        .value-display { float: right; color: #fff; font-weight: bold; font-family: 'Consolas', monospace; }
+        h3 {
+            margin: 0 0 10px 0;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #00ddee;
+            letter-spacing: 1.2px;
+            border-bottom: 1px solid rgba(51, 68, 85, 0.5);
+            padding-bottom: 6px;
+        }
 
-        /* Custom Sliders */
+        /* --- コントロールパネル（レスポンシブ） --- */
+        #controls {
+            top: 10px;
+            left: 10px;
+            width: min(280px, calc(100vw - 20px));
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+        }
+
+        /* スマホ用スクロールバー非表示 */
+        #controls::-webkit-scrollbar {
+            width: 3px;
+        }
+        #controls::-webkit-scrollbar-thumb {
+            background: #00ddee;
+            border-radius: 2px;
+        }
+
+        label {
+            font-size: 10px;
+            color: #8899aa;
+            display: block;
+            margin-top: 10px;
+            letter-spacing: 0.3px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .value-display {
+            float: right;
+            color: #00ddee;
+            font-weight: 700;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 11px;
+        }
+
+        /* --- カスタムスライダー（タッチ最適化） --- */
         input[type=range] {
-            width: 100%; margin: 6px 0; -webkit-appearance: none; background: transparent;
+            width: 100%;
+            margin: 8px 0;
+            -webkit-appearance: none;
+            background: transparent;
+            height: 32px; /* タッチしやすい高さ */
         }
         input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 2px; background: #00ddee; cursor: pointer; margin-top: -5px; box-shadow: 0 0 5px #00ddee;
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 3px;
+            background: #00ddee;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 8px rgba(0, 221, 238, 0.6);
+            transition: all 0.2s;
+        }
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+            box-shadow: 0 0 12px rgba(0, 221, 238, 0.9);
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; cursor: pointer; background: #334455; border-radius: 2px;
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: linear-gradient(90deg, #1a2a3a 0%, #334455 100%);
+            border-radius: 2px;
         }
 
-        /* Task Space Display */
+        /* --- 座標表示 --- */
         .xyz-container {
-            display: flex; justify-content: space-between; 
-            font-family: 'Consolas', monospace; font-size: 14px; 
-            margin-top: 15px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            margin-top: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 221, 238, 0.1);
         }
-        .coord-label { color: #8899aa; font-size: 10px; margin-right: 4px; }
+        .coord-label {
+            color: #6688aa;
+            font-size: 9px;
+            margin-right: 3px;
+            font-weight: bold;
+        }
 
-        /* Right Data Panel */
-        #data-panel { top: 20px; right: 20px; width: 320px; height: 220px; }
+        /* --- データパネル（モバイル対応） --- */
+        #data-panel {
+            top: 10px;
+            right: 10px;
+            width: min(260px, calc(100vw - 300px));
+            height: 180px;
+        }
 
-        /* Buttons */
-        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        /* スマホでは下部に配置 */
+        @media (max-width: 768px) {
+            #data-panel {
+                top: auto;
+                bottom: 80px;
+                right: 10px;
+                left: 10px;
+                width: calc(100vw - 20px);
+                height: 160px;
+            }
+        }
+
+        /* --- ボタン（タッチ最適化） --- */
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
         .btn {
-            flex: 1; border: none; padding: 8px; border-radius: 3px; 
-            cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase;
-            transition: all 0.2s; color: #000;
+            flex: 1;
+            border: none;
+            padding: 12px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            color: #000;
+            letter-spacing: 0.5px;
+            touch-action: manipulation;
+            min-height: 44px; /* タッチしやすいサイズ */
         }
-        .btn-reset { background: #445566; color: #fff; }
-        .btn-auto { background: #ffaa00; } /* Orange */
-        .btn:hover { filter: brightness(1.2); }
-        .btn:active { transform: scale(0.98); }
+        .btn-reset {
+            background: linear-gradient(135deg, #556677 0%, #445566 100%);
+            color: #fff;
+        }
+        .btn-auto {
+            background: linear-gradient(135deg, #ffbb33 0%, #ff8800 100%);
+            box-shadow: 0 4px 15px rgba(255, 170, 0, 0.3);
+        }
+        .btn-auto.running {
+            background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+            animation: btnPulse 1.5s infinite;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.15);
+        }
+        .btn:active {
+            transform: scale(0.96);
+        }
 
-        /* Indicators */
-        #status-indicator {
-            position: absolute; bottom: 20px; left: 20px; 
-            font-size: 11px; color: #666; font-family: monospace;
+        @keyframes btnPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3); }
+            50% { box-shadow: 0 4px 25px rgba(255, 68, 68, 0.6); }
         }
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00ff00; margin-right: 5px; }
+
+        /* --- ステータスインジケーター --- */
+        #status-indicator {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #8899aa;
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: rgba(12, 18, 26, 0.9);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 221, 238, 0.3);
+            backdrop-filter: blur(8px);
+            white-space: nowrap;
+            max-width: calc(100vw - 30px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff88;
+            margin-right: 8px;
+            box-shadow: 0 0 8px currentColor;
+        }
         .mode-manual { background: #00ddee; }
         .mode-auto { background: #ffaa00; animation: pulse 1s infinite; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        /* --- 進行状況バー --- */
+        #progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ddee 0%, #ffaa00 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        /* --- ステップインジケーター --- */
+        #step-indicator {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            background: rgba(12, 18, 26, 0.9);
+            padding: 8px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 221, 238, 0.2);
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #step-indicator.visible {
+            opacity: 1;
+        }
+
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #334455;
+            transition: all 0.3s;
+        }
+
+        .step-dot.active {
+            background: #ffaa00;
+            box-shadow: 0 0 10px #ffaa00;
+            transform: scale(1.3);
+        }
+
+        .step-dot.completed {
+            background: #00ff88;
+        }
+
+        /* --- グリッパー状態インジケーター --- */
+        #gripper-status {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: #ffaa00;
+            font-family: 'Consolas', monospace;
+            background: rgba(12, 18, 26, 0.9);
+            padding: 6px 14px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 170, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-weight: 700;
+        }
+
+        #gripper-status.visible {
+            opacity: 1;
+        }
+
+        /* --- モバイルタッチコントロール --- */
+        @media (max-width: 768px) {
+            #controls {
+                font-size: 95%;
+            }
+
+            h3 {
+                font-size: 10px;
+            }
+
+            .btn {
+                font-size: 10px;
+                padding: 10px 6px;
+            }
+        }
+
+        /* --- ローディングアニメーション --- */
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
 
+    <div id="progress-bar"></div>
     <div id="canvas-container"></div>
 
+    <!-- ステップインジケーター -->
+    <div id="step-indicator">
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+    </div>
+
+    <!-- コントロールパネル -->
     <div id="controls" class="panel">
-        <h3>Joint Controls</h3>
-        
+        <h3>🎮 Joint Controls</h3>
+
         <label>Base (J1) <span id="val1" class="value-display">0°</span></label>
-        <input type="range" id="in1" min="-180" max="180" value="0">
+        <input type="range" id="in1" min="-180" max="180" value="0" step="1">
 
         <label>Shoulder (J2) <span id="val2" class="value-display">0°</span></label>
-        <input type="range" id="in2" min="-45" max="90" value="0"> <label>Elbow (J3) <span id="val3" class="value-display">0°</span></label>
-        <input type="range" id="in3" min="-90" max="90" value="0">
+        <input type="range" id="in2" min="-45" max="90" value="0" step="1">
 
-        <label style="margin-top: 20px; border-top: 1px solid #334455; padding-top: 10px;">End-Effector Coordinates (FK)</label>
+        <label>Elbow (J3) <span id="val3" class="value-display">0°</span></label>
+        <input type="range" id="in3" min="-90" max="90" value="0" step="1">
+
+        <label style="margin-top: 18px; border-top: 1px solid rgba(51,68,85,0.5); padding-top: 12px;">📍 End-Effector Position</label>
         <div class="xyz-container">
             <span style="color: #ff6666"><span class="coord-label">X</span><span id="posX">0.00</span></span>
             <span style="color: #66ff66"><span class="coord-label">Y</span><span id="posY">0.00</span></span>
@@ -103,225 +383,436 @@
         </div>
 
         <div class="btn-group">
-            <button class="btn btn-reset" onclick="resetSim()">Reset</button>
-            <button class="btn btn-auto" onclick="toggleAutomation()">▶ Pick & Place</button>
+            <button class="btn btn-reset" onclick="resetSim()">🔄 Reset</button>
+            <button id="autoBtn" class="btn btn-auto" onclick="toggleAutomation()">▶ Start</button>
         </div>
     </div>
 
+    <!-- データパネル -->
     <div id="data-panel" class="panel">
-        <h3>Angular Velocity (Shoulder)</h3>
+        <h3>📊 Angular Velocity (J2)</h3>
         <canvas id="velocityChart"></canvas>
     </div>
 
+    <!-- ステータス表示 -->
     <div id="status-indicator">
         <span id="mode-dot" class="status-dot mode-manual"></span>
-        STATUS: <span id="status-text">MANUAL CONTROL ACTIVE</span>
+        <span id="status-text">MANUAL CONTROL ACTIVE</span>
     </div>
 
+    <!-- グリッパー状態 -->
+    <div id="gripper-status">● GRIPPER: OPEN</div>
+
     <script>
-        // --- 1. CONFIGURATION ---
+        // --- 1. 設定 ---
         const CONFIG = {
             colors: {
-                bg: 0x15151e,
-                grid: 0x333333,
-                base: 0x222222,
-                link: 0xe0e0e0,
-                joint: 0x333333,
+                bg: 0x0a0e14,
+                grid: 0x1a2a3a,
+                base: 0x1a1a22,
+                link: 0xd0d0d8,
+                joint: 0x2a2a3a,
                 accent: 0xffaa00,
-                box: 0xff4444
+                box: 0xff4444,
+                platform: 0x00ddee
             },
-            smoothness: 0.08, // 動きの遅れ係数 (小さいほど重厚)
-            autoSpeed: 2      // 自動再生時の待機時間倍率
+            smoothness: 0.12,      // 動きの滑らかさ
+            gripperSpeed: 0.15,     // グリッパー開閉速度
+            autoSpeedMultiplier: 1.0
         };
 
-        // --- 2. THREE.JS SETUP ---
+        // --- 2. THREE.JS セットアップ ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(CONFIG.colors.bg);
-        scene.fog = new THREE.Fog(CONFIG.colors.bg, 10, 40);
+        scene.fog = new THREE.Fog(CONFIG.colors.bg, 8, 35);
 
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(6, 5, 6);
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            100
+        );
+        camera.position.set(5, 4, 5);
         camera.lookAt(0, 1.5, 0);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({
+            antialias: window.innerWidth > 768, // モバイルではアンチエイリアス無効化
+            powerPreference: "high-performance"
+        });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // パフォーマンス最適化
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
-        // Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        // ライティング
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        dirLight.position.set(5, 10, 5);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(6, 10, 4);
         dirLight.castShadow = true;
         dirLight.shadow.mapSize.width = 1024;
         dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 30;
+        dirLight.shadow.camera.left = -10;
+        dirLight.shadow.camera.right = 10;
+        dirLight.shadow.camera.top = 10;
+        dirLight.shadow.camera.bottom = -10;
         scene.add(dirLight);
 
-        // Environment
-        const grid = new THREE.GridHelper(20, 20, 0x555555, 0x222222);
+        // 環境
+        const grid = new THREE.GridHelper(20, 20, 0x2a3a4a, 0x1a2030);
         scene.add(grid);
+
         const floorGeo = new THREE.PlaneGeometry(20, 20);
-        const floorMat = new THREE.MeshPhongMaterial({ color: 0x111111, depthWrite: false });
+        const floorMat = new THREE.MeshPhongMaterial({
+            color: 0x0d1117,
+            depthWrite: false
+        });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         floor.receiveShadow = true;
         scene.add(floor);
 
-        // --- 3. ROBOT CONSTRUCTION ---
+        // --- 3. ロボット構築 ---
         const robotGroup = new THREE.Group();
         scene.add(robotGroup);
 
-        // Reusable Materials
-        const matBase = new THREE.MeshPhongMaterial({ color: CONFIG.colors.base });
-        const matLink = new THREE.MeshPhongMaterial({ color: CONFIG.colors.link, shininess: 80 });
-        const matJoint = new THREE.MeshStandardMaterial({ color: CONFIG.colors.joint, roughness: 0.6 });
-        const matAccent = new THREE.MeshBasicMaterial({ color: CONFIG.colors.accent });
+        // マテリアル
+        const matBase = new THREE.MeshPhongMaterial({ color: CONFIG.colors.base, shininess: 30 });
+        const matLink = new THREE.MeshPhongMaterial({ color: CONFIG.colors.link, shininess: 90 });
+        const matJoint = new THREE.MeshStandardMaterial({ color: CONFIG.colors.joint, roughness: 0.5, metalness: 0.3 });
+        const matAccent = new THREE.MeshStandardMaterial({ color: CONFIG.colors.accent, emissive: CONFIG.colors.accent, emissiveIntensity: 0.2 });
 
-        // -- Base --
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 0.4, 32), matBase);
+        // ベース
+        const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.8, 1.0, 0.4, 32),
+            matBase
+        );
         base.position.y = 0.2;
         base.receiveShadow = true;
         base.castShadow = true;
         robotGroup.add(base);
 
-        // -- Joint 1 (Yaw) --
+        // ジョイント1（ヨー）
         const joint1 = new THREE.Group();
         joint1.position.y = 0.4;
         robotGroup.add(joint1);
 
-        // J1 Visuals
-        const j1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32), matJoint);
+        const j1Mesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32),
+            matJoint
+        );
         j1Mesh.position.y = 0.2;
         j1Mesh.castShadow = true;
         joint1.add(j1Mesh);
-        const link1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), matLink);
+
+        const link1 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 1.2, 0.5),
+            matLink
+        );
         link1.position.y = 1.0;
         link1.castShadow = true;
         joint1.add(link1);
 
-        // -- Joint 2 (Pitch) --
+        // ジョイント2（ピッチ）
         const joint2 = new THREE.Group();
-        joint2.position.y = 1.8; // Top of Link 1
+        joint2.position.y = 1.8;
         joint1.add(joint2);
 
-        // J2 Visuals
-        const j2Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 32), matJoint);
+        const j2Axis = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.3, 0.7, 32),
+            matJoint
+        );
         j2Axis.rotation.z = Math.PI / 2;
         j2Axis.castShadow = true;
         joint2.add(j2Axis);
-        const link2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 0.4), matLink);
-        link2.position.y = 1.0; // Extend upwards
+
+        const link2 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 1.6, 0.4),
+            matLink
+        );
+        link2.position.y = 1.0;
         link2.castShadow = true;
         joint2.add(link2);
 
-        // -- Joint 3 (Pitch/Elbow) --
+        // ジョイント3（エルボー）
         const joint3 = new THREE.Group();
-        joint3.position.y = 1.8; // Top of Link 2
+        joint3.position.y = 1.8;
         joint2.add(joint3);
 
-        // J3 Visuals
-        const j3Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.6, 32), matJoint);
+        const j3Axis = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.25, 0.25, 0.6, 32),
+            matJoint
+        );
         j3Axis.rotation.z = Math.PI / 2;
         j3Axis.castShadow = true;
         joint3.add(j3Axis);
-        const link3 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), matLink);
+
+        const link3 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.6, 0.3),
+            matLink
+        );
         link3.position.y = 0.4;
         link3.castShadow = true;
         joint3.add(link3);
 
-        // -- End Effector (Hand) --
+        // エンドエフェクター（グリッパー）
         const handGroup = new THREE.Group();
         handGroup.position.y = 0.7;
         joint3.add(handGroup);
-        
-        const handBase = new THREE.Mesh(new THREE.SphereGeometry(0.25), matAccent);
-        handGroup.add(handBase);
-        
-        // Gripper fingers
-        const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f1.position.set(0.15, 0.3, 0);
-        handGroup.add(f1);
-        const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f2.position.set(-0.15, 0.3, 0);
-        handGroup.add(f2);
 
-        // --- 4. OBJECTS & TRAJECTORY ---
-        
-        // Target Box
+        const handBase = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 16, 16),
+            matAccent
+        );
+        handBase.castShadow = true;
+        handGroup.add(handBase);
+
+        // グリッパーフィンガー（アニメーション可能）
+        const finger1 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.5, 0.08),
+            matJoint
+        );
+        finger1.position.set(0.15, 0.35, 0);
+        finger1.castShadow = true;
+        handGroup.add(finger1);
+
+        const finger2 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.5, 0.08),
+            matJoint
+        );
+        finger2.position.set(-0.15, 0.35, 0);
+        finger2.castShadow = true;
+        handGroup.add(finger2);
+
+        // --- 4. オブジェクトとプラットフォーム ---
+
+        // ターゲットボックス
         const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-        const boxMat = new THREE.MeshPhongMaterial({ color: CONFIG.colors.box });
+        const boxMat = new THREE.MeshPhongMaterial({
+            color: CONFIG.colors.box,
+            shininess: 60
+        });
         const targetBox = new THREE.Mesh(boxGeo, boxMat);
-        targetBox.position.set(2.0, 0.2, 1.5); // Initial Position
+        targetBox.position.set(2.0, 0.2, 1.5);
         targetBox.castShadow = true;
+        targetBox.receiveShadow = true;
         scene.add(targetBox);
 
-        // Trajectory Line
-        const maxPoints = 300;
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x00ddee, linewidth: 2 });
+        // 配置プラットフォーム
+        const platformGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.3, 32);
+        const platformMat = new THREE.MeshPhongMaterial({
+            color: CONFIG.colors.platform,
+            emissive: CONFIG.colors.platform,
+            emissiveIntensity: 0.1,
+            shininess: 100
+        });
+        const platform = new THREE.Mesh(platformGeo, platformMat);
+        platform.position.set(-2.2, 0.15, 1.8);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        scene.add(platform);
+
+        // 軌跡ライン
+        const maxPoints = 400;
+        const lineMat = new THREE.LineBasicMaterial({
+            color: 0x00ddee,
+            linewidth: 2,
+            transparent: true,
+            opacity: 0.6
+        });
         const lineGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(maxPoints * 3);
         lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         const trailLine = new THREE.Line(lineGeo, lineMat);
         scene.add(trailLine);
 
-        // --- 5. AUTOMATION LOGIC ---
+        // --- 5. 自動化ロジック ---
         let isAutomating = false;
         let automationStep = 0;
         let stepTimer = 0;
+        let gripperState = 0; // 0 = open, 1 = closed
+        let targetGripperState = 0;
+        let isGripping = false; // 実際に掴んでいるかのフラグ
 
-        // Sequence: Angles [J1, J2, J3], WaitFrames, Action
+        // シーケンス定義（より詳細に）
         const sequence = [
-            { a: [0, 0, 0], w: 60, type: 'move' }, // Home
-            { a: [37, 20, 25], w: 30, type: 'move' }, // Approach
-            { a: [37, 45, 60], w: 40, type: 'grab' }, // Grab Position
-            { a: [37, 10, 10], w: 40, type: 'move' }, // Lift
-            { a: [-40, 10, 10], w: 40, type: 'move' }, // Carry
-            { a: [-40, 45, 60], w: 40, type: 'drop' }, // Place Position
-            { a: [-40, 0, 0], w: 40, type: 'move' }, // Retreat
-            { a: [0, 0, 0], w: 0, type: 'finish' } // Return Home
+            {
+                name: 'ホームポジション',
+                angles: [0, 0, 0],
+                wait: 40,
+                action: null,
+                description: 'Starting position'
+            },
+            {
+                name: 'アプローチ',
+                angles: [37, 15, 20],
+                wait: 50,
+                action: null,
+                description: 'Approaching target'
+            },
+            {
+                name: '掴む準備',
+                angles: [37, 40, 55],
+                wait: 30,
+                action: 'prepare_grab',
+                description: 'Preparing to grab'
+            },
+            {
+                name: 'グリップ',
+                angles: [37, 45, 65],
+                wait: 50,
+                action: 'grab',
+                description: 'Gripping object'
+            },
+            {
+                name: '持ち上げ',
+                angles: [37, 10, 15],
+                wait: 50,
+                action: null,
+                description: 'Lifting object'
+            },
+            {
+                name: '移動',
+                angles: [-45, 10, 15],
+                wait: 60,
+                action: null,
+                description: 'Carrying object'
+            },
+            {
+                name: '配置位置',
+                angles: [-45, 42, 62],
+                wait: 40,
+                action: 'prepare_drop',
+                description: 'Positioning for placement'
+            },
+            {
+                name: 'リリース',
+                angles: [-45, 45, 65],
+                wait: 50,
+                action: 'drop',
+                description: 'Releasing object'
+            },
+            {
+                name: '後退',
+                angles: [-45, 5, 5],
+                wait: 40,
+                action: null,
+                description: 'Retreating'
+            },
+            {
+                name: '帰還',
+                angles: [0, 0, 0],
+                wait: 0,
+                action: 'finish',
+                description: 'Returning home'
+            }
         ];
 
+        // グリッパー制御
+        function updateGripper() {
+            gripperState += (targetGripperState - gripperState) * CONFIG.gripperSpeed;
+
+            // グリッパーフィンガーのアニメーション
+            const openPos = 0.15;
+            const closedPos = 0.08;
+            const currentPos = openPos - (openPos - closedPos) * gripperState;
+
+            finger1.position.x = currentPos;
+            finger2.position.x = -currentPos;
+
+            // グリッパー状態表示
+            const gripperStatus = document.getElementById('gripper-status');
+            if (Math.abs(gripperState - targetGripperState) < 0.05) {
+                if (targetGripperState > 0.5) {
+                    gripperStatus.textContent = '🤏 GRIPPER: CLOSED';
+                    gripperStatus.style.borderColor = 'rgba(0, 255, 136, 0.5)';
+                    gripperStatus.style.color = '#00ff88';
+                } else {
+                    gripperStatus.textContent = '✋ GRIPPER: OPEN';
+                    gripperStatus.style.borderColor = 'rgba(255, 170, 0, 0.3)';
+                    gripperStatus.style.color = '#ffaa00';
+                }
+            } else {
+                gripperStatus.textContent = targetGripperState > 0.5 ? '⏳ CLOSING...' : '⏳ OPENING...';
+                gripperStatus.style.color = '#00ddee';
+            }
+        }
+
+        // オブジェクト掴む
         function grabBox() {
-            // Three.js magic: Attach preserves world transform while changing parent
-            handGroup.attach(targetBox);
+            if (!isGripping) {
+                targetGripperState = 1;
+                // グリッパーが完全に閉じるまで待機してから掴む
+                setTimeout(() => {
+                    handGroup.attach(targetBox);
+                    isGripping = true;
+                    console.log('✓ Object gripped');
+                }, 300);
+            }
         }
 
+        // オブジェクト離す
         function dropBox() {
-            scene.attach(targetBox);
-            // Snap to floor to avoid floating errors
-            targetBox.position.y = 0.2;
-            targetBox.rotation.set(0, 0, 0);
+            if (isGripping) {
+                scene.attach(targetBox);
+                targetGripperState = 0;
+                isGripping = false;
+                // 床面に配置
+                targetBox.position.y = 0.2;
+                targetBox.rotation.set(0, 0, 0);
+                console.log('✓ Object released');
+            }
         }
 
+        // 自動化トグル
         function toggleAutomation() {
-            if (isAutomating) return; // Already running
-            
+            if (isAutomating) {
+                // 停止
+                isAutomating = false;
+                automationStep = 0;
+                stepTimer = 0;
+                updateStatus(false);
+                updateStepIndicator();
+                document.getElementById('autoBtn').classList.remove('running');
+                document.getElementById('autoBtn').innerHTML = '▶ Start';
+                return;
+            }
+
+            // 開始
             isAutomating = true;
             automationStep = 0;
             stepTimer = 0;
-            
-            // Reset Box
-            dropBox(); 
+
+            // オブジェクトをリセット
+            if (isGripping) {
+                dropBox();
+            }
             targetBox.position.set(2.0, 0.2, 1.5);
-            
+
             updateStatus(true);
+            updateStepIndicator();
+            document.getElementById('autoBtn').classList.add('running');
+            document.getElementById('autoBtn').innerHTML = '⏸ Stop';
+            document.getElementById('gripper-status').classList.add('visible');
         }
 
-        // --- 6. CHART.JS SETUP ---
+        // --- 6. Chart.js セットアップ ---
         const ctx = document.getElementById('velocityChart').getContext('2d');
         const vChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: Array(40).fill(''),
+                labels: Array(50).fill(''),
                 datasets: [{
-                    data: Array(40).fill(0),
+                    data: Array(50).fill(0),
                     borderColor: '#00ddee',
-                    borderWidth: 1.5,
-                    backgroundColor: 'rgba(0, 221, 238, 0.1)',
-                    fill: 'start',
+                    borderWidth: 2,
+                    backgroundColor: 'rgba(0, 221, 238, 0.15)',
+                    fill: true,
                     tension: 0.4,
                     pointRadius: 0
                 }]
@@ -332,13 +823,18 @@
                 animation: false,
                 plugins: { legend: { display: false } },
                 scales: {
-                    y: { min: -3, max: 3, grid: { color: '#334455' } },
+                    y: {
+                        min: -4,
+                        max: 4,
+                        grid: { color: 'rgba(51, 68, 85, 0.3)' },
+                        ticks: { color: '#8899aa', font: { size: 9 } }
+                    },
                     x: { display: false }
                 }
             }
         });
 
-        // --- 7. MAIN LOOP & CONTROL ---
+        // --- 7. UI管理 ---
         const ui = {
             in1: document.getElementById('in1'),
             in2: document.getElementById('in2'),
@@ -350,136 +846,274 @@
             y: document.getElementById('posY'),
             z: document.getElementById('posZ'),
             status: document.getElementById('status-text'),
-            dot: document.getElementById('mode-dot')
+            dot: document.getElementById('mode-dot'),
+            progressBar: document.getElementById('progress-bar'),
+            stepIndicator: document.getElementById('step-indicator')
         };
 
-        // Current state for Lerp
+        // 現在の状態
         let cur = { j1: 0, j2: 0, j3: 0 };
-        let prevJ2 = 0; // For velocity calc
+        let prevJ2 = 0;
         const tempVec = new THREE.Vector3();
 
         function updateStatus(auto) {
-            if(auto) {
-                ui.status.textContent = "AUTOMATION SEQUENCE RUNNING...";
+            if (auto) {
+                const step = sequence[automationStep];
+                ui.status.textContent = `${automationStep + 1}/${sequence.length}: ${step.name.toUpperCase()}`;
                 ui.dot.className = "status-dot mode-auto";
+                ui.stepIndicator.classList.add('visible');
             } else {
                 ui.status.textContent = "MANUAL CONTROL ACTIVE";
                 ui.dot.className = "status-dot mode-manual";
+                ui.stepIndicator.classList.remove('visible');
+                document.getElementById('gripper-status').classList.remove('visible');
             }
+        }
+
+        function updateStepIndicator() {
+            const dots = document.querySelectorAll('.step-dot');
+            dots.forEach((dot, idx) => {
+                dot.classList.remove('active', 'completed');
+                if (idx < automationStep) {
+                    dot.classList.add('completed');
+                } else if (idx === automationStep) {
+                    dot.classList.add('active');
+                }
+            });
+
+            // 進行状況バー
+            const progress = (automationStep / (sequence.length - 1)) * 100;
+            ui.progressBar.style.width = progress + '%';
         }
 
         function resetSim() {
             isAutomating = false;
+            automationStep = 0;
+            stepTimer = 0;
+
             ui.in1.value = 0;
             ui.in2.value = 0;
             ui.in3.value = 0;
-            dropBox();
+
+            if (isGripping) {
+                dropBox();
+            }
             targetBox.position.set(2.0, 0.2, 1.5);
-            // Reset trail
+            targetGripperState = 0;
+
+            // 軌跡リセット
             positions.fill(0);
             lineGeo.attributes.position.needsUpdate = true;
+
             updateStatus(false);
+            updateStepIndicator();
+            ui.progressBar.style.width = '0%';
+
+            document.getElementById('autoBtn').classList.remove('running');
+            document.getElementById('autoBtn').innerHTML = '▶ Start';
         }
 
         function updateTrail() {
             handGroup.getWorldPosition(tempVec);
-            
-            // Shift array
+
+            // 配列をシフト
             for (let i = 0; i < maxPoints - 1; i++) {
                 positions[i * 3] = positions[(i + 1) * 3];
                 positions[i * 3 + 1] = positions[(i + 1) * 3 + 1];
                 positions[i * 3 + 2] = positions[(i + 1) * 3 + 2];
             }
-            // Add new
+
+            // 新しい点を追加
             positions[(maxPoints - 1) * 3] = tempVec.x;
             positions[(maxPoints - 1) * 3 + 1] = tempVec.y;
             positions[(maxPoints - 1) * 3 + 2] = tempVec.z;
-            
+
             lineGeo.attributes.position.needsUpdate = true;
-            
-            // UI XYZ Update
+
+            // UI座標更新
             ui.x.textContent = tempVec.x.toFixed(2);
             ui.y.textContent = tempVec.y.toFixed(2);
             ui.z.textContent = tempVec.z.toFixed(2);
         }
 
+        // --- 8. メインループ ---
         function animate() {
             requestAnimationFrame(animate);
 
-            let t1, t2, t3; // Targets
+            let t1, t2, t3;
 
             if (isAutomating) {
                 const step = sequence[automationStep];
-                t1 = step.a[0];
-                t2 = step.a[1];
-                t3 = step.a[2];
+                t1 = step.angles[0];
+                t2 = step.angles[1];
+                t3 = step.angles[2];
 
-                // Check distance to target
+                // 目標位置との距離チェック
                 const d1 = Math.abs(cur.j1 - t1);
                 const d2 = Math.abs(cur.j2 - t2);
                 const d3 = Math.abs(cur.j3 - t3);
+                const threshold = 0.5;
 
-                if (d1 < 0.5 && d2 < 0.5 && d3 < 0.5) {
+                if (d1 < threshold && d2 < threshold && d3 < threshold) {
                     stepTimer++;
-                    if (stepTimer > step.w) {
-                        if(step.type === 'grab') grabBox();
-                        if(step.type === 'drop') dropBox();
-                        if(step.type === 'finish') isAutomating = false;
-                        
-                        if(isAutomating) automationStep++;
+
+                    if (stepTimer > step.wait) {
+                        // アクション実行
+                        if (step.action === 'prepare_grab') {
+                            targetGripperState = 0; // グリッパーを開く
+                        } else if (step.action === 'grab') {
+                            grabBox();
+                        } else if (step.action === 'prepare_drop') {
+                            // 配置準備
+                        } else if (step.action === 'drop') {
+                            dropBox();
+                        } else if (step.action === 'finish') {
+                            isAutomating = false;
+                            updateStatus(false);
+                            updateStepIndicator();
+                            document.getElementById('autoBtn').classList.remove('running');
+                            document.getElementById('autoBtn').innerHTML = '▶ Start';
+                            document.getElementById('gripper-status').classList.remove('visible');
+                        }
+
+                        if (isAutomating && automationStep < sequence.length - 1) {
+                            automationStep++;
+                            updateStatus(true);
+                            updateStepIndicator();
+                        }
                         stepTimer = 0;
                     }
                 }
-                
-                // Sync sliders to auto movement
-                ui.in1.value = cur.j1;
-                ui.in2.value = cur.j2;
-                ui.in3.value = cur.j3;
 
-                if (!isAutomating) updateStatus(false);
+                // スライダー同期
+                ui.in1.value = Math.round(cur.j1);
+                ui.in2.value = Math.round(cur.j2);
+                ui.in3.value = Math.round(cur.j3);
 
             } else {
-                // Manual Mode
+                // 手動モード
                 t1 = parseFloat(ui.in1.value);
                 t2 = parseFloat(ui.in2.value);
                 t3 = parseFloat(ui.in3.value);
             }
 
-            // Physics: Smoothing (Lerp)
+            // スムージング（Lerp）
             cur.j1 += (t1 - cur.j1) * CONFIG.smoothness;
             cur.j2 += (t2 - cur.j2) * CONFIG.smoothness;
             cur.j3 += (t3 - cur.j3) * CONFIG.smoothness;
 
-            // Apply Rotations (Deg -> Rad)
+            // ロボット回転適用
             joint1.rotation.y = THREE.MathUtils.degToRad(-cur.j1);
             joint2.rotation.z = THREE.MathUtils.degToRad(cur.j2);
             joint3.rotation.z = THREE.MathUtils.degToRad(cur.j3);
 
-            // UI Text Update
+            // グリッパー更新
+            updateGripper();
+
+            // UI更新
             ui.val1.textContent = Math.round(cur.j1) + "°";
             ui.val2.textContent = Math.round(cur.j2) + "°";
             ui.val3.textContent = Math.round(cur.j3) + "°";
 
-            // Chart Update
+            // チャート更新
             const velocity = (cur.j2 - prevJ2);
             prevJ2 = cur.j2;
             const cData = vChart.data.datasets[0].data;
             cData.shift();
-            cData.push(velocity * 2); // Scale for visibility
-            vChart.update('none'); // 'none' for performance
+            cData.push(velocity * 3);
+            vChart.update('none');
 
             updateTrail();
             renderer.render(scene, camera);
         }
 
-        // Resize Handler
+        // --- 9. イベントリスナー ---
+
+        // リサイズ
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Start
+        // タッチジェスチャー（カメラ回転）
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let cameraAngle = 0;
+        let cameraHeight = 4;
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        container.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                const deltaX = e.touches[0].clientX - touchStartX;
+                const deltaY = e.touches[0].clientY - touchStartY;
+
+                cameraAngle += deltaX * 0.005;
+                cameraHeight = Math.max(2, Math.min(8, cameraHeight - deltaY * 0.01));
+
+                const radius = 7;
+                camera.position.x = Math.sin(cameraAngle) * radius;
+                camera.position.z = Math.cos(cameraAngle) * radius;
+                camera.position.y = cameraHeight;
+                camera.lookAt(0, 2, 0);
+
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        // マウスドラッグ（PC用カメラ回転）
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+
+        container.addEventListener('mousedown', (e) => {
+            if (e.target === renderer.domElement) {
+                isDragging = true;
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+            }
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - previousMouseX;
+                const deltaY = e.clientY - previousMouseY;
+
+                cameraAngle += deltaX * 0.005;
+                cameraHeight = Math.max(2, Math.min(8, cameraHeight - deltaY * 0.01));
+
+                const radius = 7;
+                camera.position.x = Math.sin(cameraAngle) * radius;
+                camera.position.z = Math.cos(cameraAngle) * radius;
+                camera.position.y = cameraHeight;
+                camera.lookAt(0, 2, 0);
+
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+            }
+        });
+
+        container.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        container.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
+
+        // --- 10. 起動 ---
+        console.log('%c🤖 Robot Simulator v4.0 initialized', 'color: #00ddee; font-size: 14px; font-weight: bold');
+        console.log('%c✓ Mobile optimized', 'color: #00ff88');
+        console.log('%c✓ Touch controls enabled', 'color: #00ff88');
+        console.log('%c✓ Gripper animation ready', 'color: #00ff88');
+
         animate();
 
     </script>
