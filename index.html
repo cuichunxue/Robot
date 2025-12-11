@@ -693,6 +693,47 @@
             return { x: finalX, y: finalY, z: finalZ };
         }
 
+        // 逆運動学: 目標位置(x,y,z)からジョイント角度を計算
+        function inverseKinematics(targetX, targetY, targetZ) {
+            // J1: XZ平面での方位角
+            const j1 = THREE.MathUtils.radToDeg(Math.atan2(targetX, targetZ));
+
+            // XZ平面での距離
+            const horizontalDist = Math.sqrt(targetX * targetX + targetZ * targetZ);
+
+            // Link1の上からの相対高さ
+            const relativeY = targetY - ROBOT_DIMS.link1Height;
+
+            // Link2とLink3+Handの合成長さで届く必要がある
+            const L2 = ROBOT_DIMS.link2Length;
+            const L3 = ROBOT_DIMS.link3Length + ROBOT_DIMS.handLength;
+
+            // 目標位置までの距離（Link1の上から）
+            const targetDist = Math.sqrt(horizontalDist * horizontalDist + relativeY * relativeY);
+
+            // 届かない場合は警告
+            if (targetDist > L2 + L3) {
+                console.warn('⚠️ Target out of reach!', {
+                    target: `(${targetX.toFixed(2)}, ${targetY.toFixed(2)}, ${targetZ.toFixed(2)})`,
+                    distance: targetDist.toFixed(2),
+                    maxReach: (L2 + L3).toFixed(2)
+                });
+            }
+
+            // コサイン定理でJ3を計算
+            const cosJ3 = (targetDist * targetDist - L2 * L2 - L3 * L3) / (2 * L2 * L3);
+            const cosJ3Clamped = Math.max(-1, Math.min(1, cosJ3)); // -1〜1にクランプ
+            const j3 = THREE.MathUtils.radToDeg(Math.acos(cosJ3Clamped));
+
+            // J2を計算
+            const alpha = Math.atan2(horizontalDist, relativeY);
+            const beta = Math.atan2(L3 * Math.sin(THREE.MathUtils.degToRad(j3)),
+                                    L2 + L3 * Math.cos(THREE.MathUtils.degToRad(j3)));
+            const j2 = THREE.MathUtils.radToDeg(alpha - beta);
+
+            return { j1, j2, j3 };
+        }
+
         // --- 5. 自動化ロジック ---
         let isAutomating = false;
         let automationStep = 0;
@@ -703,83 +744,121 @@
         let waitingForGrip = false; // グリッパーが閉じるのを待っている
         let waitingForRelease = false; // グリッパーが開くのを待っている
 
-        // シーケンス定義（順運動学で計算された正確な角度）
+        // シーケンス定義（逆運動学で正確に計算）
         // オブジェクト位置: (0, 0.2, 2.0)
         // プラットフォーム位置: (0, 0.15, -2.0)
+
+        // IKで各ステップの角度を計算
+        console.log('\n🎯 === INVERSE KINEMATICS CALCULATIONS ===');
+
+        const homeAngles = [0, 0, 0];
+
+        // オブジェクトへのアプローチ（少し上）
+        const approachIK = inverseKinematics(0, 0.6, 2.0);
+        console.log('1. Approach above object (0, 0.6, 2.0):',
+            `[${approachIK.j1.toFixed(1)}°, ${approachIK.j2.toFixed(1)}°, ${approachIK.j3.toFixed(1)}°]`);
+
+        // オブジェクト位置（グリップ準備）
+        const prepareGrabIK = inverseKinematics(0, 0.3, 2.0);
+        console.log('2. Prepare grab (0, 0.3, 2.0):',
+            `[${prepareGrabIK.j1.toFixed(1)}°, ${prepareGrabIK.j2.toFixed(1)}°, ${prepareGrabIK.j3.toFixed(1)}°]`);
+
+        // オブジェクト正確な位置（グリップ）
+        const grabIK = inverseKinematics(0, 0.2, 2.0);
+        console.log('3. Grip object (0, 0.2, 2.0):',
+            `[${grabIK.j1.toFixed(1)}°, ${grabIK.j2.toFixed(1)}°, ${grabIK.j3.toFixed(1)}°]`);
+
+        // 持ち上げ
+        const liftIK = inverseKinematics(0, 0.8, 2.0);
+        console.log('4. Lift object (0, 0.8, 2.0):',
+            `[${liftIK.j1.toFixed(1)}°, ${liftIK.j2.toFixed(1)}°, ${liftIK.j3.toFixed(1)}°]`);
+
+        // プラットフォーム上方（配置準備）
+        const preparePlaceIK = inverseKinematics(0, 0.6, -2.0);
+        console.log('5. Prepare place (0, 0.6, -2.0):',
+            `[${preparePlaceIK.j1.toFixed(1)}°, ${preparePlaceIK.j2.toFixed(1)}°, ${preparePlaceIK.j3.toFixed(1)}°]`);
+
+        // プラットフォーム配置位置（リリース）
+        const releaseIK = inverseKinematics(0, 0.35, -2.0);
+        console.log('6. Release on platform (0, 0.35, -2.0):',
+            `[${releaseIK.j1.toFixed(1)}°, ${releaseIK.j2.toFixed(1)}°, ${releaseIK.j3.toFixed(1)}°]`);
+
+        console.log('========================================\n');
+
         const sequence = [
             {
                 name: 'ホームポジション',
-                angles: [0, 0, 0],
+                angles: homeAngles,
                 wait: 30,
                 action: null,
                 description: 'Starting position'
             },
             {
                 name: 'アプローチ',
-                angles: [0, 35, 20],
+                angles: [approachIK.j1, approachIK.j2, approachIK.j3],
                 wait: 50,
                 action: null,
                 description: 'Reaching toward object'
             },
             {
                 name: '掴む準備',
-                angles: [0, 45, 30],
+                angles: [prepareGrabIK.j1, prepareGrabIK.j2, prepareGrabIK.j3],
                 wait: 40,
                 action: 'prepare_grab',
                 description: 'Positioning above object'
             },
             {
                 name: 'グリップ',
-                angles: [0, 50, 35],
+                angles: [grabIK.j1, grabIK.j2, grabIK.j3],
                 wait: 100,
                 action: 'grab',
                 description: 'Gripping object precisely'
             },
             {
                 name: '持ち上げ',
-                angles: [0, 25, 15],
+                angles: [liftIK.j1, liftIK.j2, liftIK.j3],
                 wait: 70,
                 action: null,
                 description: 'Lifting object smoothly'
             },
             {
                 name: '回転開始',
-                angles: [90, 25, 15],
+                angles: [90, liftIK.j2, liftIK.j3],
                 wait: 60,
                 action: null,
                 description: 'Rotating 90 degrees'
             },
             {
                 name: '回転完了',
-                angles: [180, 25, 15],
+                angles: [180, liftIK.j2, liftIK.j3],
                 wait: 80,
                 action: null,
                 description: 'Rotating to 180 degrees'
             },
             {
                 name: '配置準備',
-                angles: [180, 45, 30],
+                angles: [preparePlaceIK.j1 + 180, preparePlaceIK.j2, preparePlaceIK.j3],
                 wait: 60,
                 action: 'prepare_drop',
                 description: 'Positioning above platform'
             },
             {
                 name: 'リリース',
-                angles: [180, 50, 35],
+                angles: [releaseIK.j1 + 180, releaseIK.j2, releaseIK.j3],
                 wait: 100,
                 action: 'drop',
                 description: 'Gently releasing object'
             },
             {
                 name: '後退',
-                angles: [180, 25, 15],
+                angles: [preparePlaceIK.j1 + 180, preparePlaceIK.j2, preparePlaceIK.j3],
                 wait: 50,
                 action: null,
                 description: 'Lifting away from platform'
             },
             {
                 name: '帰還',
-                angles: [0, 0, 0],
+                angles: homeAngles,
                 wait: 0,
                 action: 'finish',
                 description: 'Returning to home'
