@@ -360,6 +360,8 @@
         <div class="step-dot"></div>
         <div class="step-dot"></div>
         <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <!-- コントロールパネル -->
@@ -638,71 +640,73 @@
         let gripperState = 0; // 0 = open, 1 = closed
         let targetGripperState = 0;
         let isGripping = false; // 実際に掴んでいるかのフラグ
+        let waitingForGrip = false; // グリッパーが閉じるのを待っている
+        let waitingForRelease = false; // グリッパーが開くのを待っている
 
         // シーケンス定義（より詳細に）
         const sequence = [
             {
                 name: 'ホームポジション',
                 angles: [0, 0, 0],
-                wait: 40,
+                wait: 30,
                 action: null,
                 description: 'Starting position'
             },
             {
                 name: 'アプローチ',
                 angles: [37, 15, 20],
-                wait: 50,
+                wait: 40,
                 action: null,
                 description: 'Approaching target'
             },
             {
                 name: '掴む準備',
                 angles: [37, 40, 55],
-                wait: 30,
+                wait: 40,
                 action: 'prepare_grab',
                 description: 'Preparing to grab'
             },
             {
-                name: 'グリップ',
-                angles: [37, 45, 65],
-                wait: 50,
+                name: 'グリップ開始',
+                angles: [37, 43, 62],
+                wait: 60,
                 action: 'grab',
-                description: 'Gripping object'
+                description: 'Gripping object - WAIT FOR GRIPPER TO CLOSE'
             },
             {
                 name: '持ち上げ',
                 angles: [37, 10, 15],
-                wait: 50,
+                wait: 60,
                 action: null,
-                description: 'Lifting object'
+                description: 'Lifting object with gripper'
             },
             {
                 name: '移動',
                 angles: [-45, 10, 15],
-                wait: 60,
+                wait: 70,
                 action: null,
-                description: 'Carrying object'
+                description: 'Carrying object to platform'
             },
             {
                 name: '配置位置',
                 angles: [-45, 42, 62],
-                wait: 40,
+                wait: 50,
                 action: 'prepare_drop',
                 description: 'Positioning for placement'
             },
             {
-                name: 'リリース',
-                angles: [-45, 45, 65],
-                wait: 50,
+                name: 'リリース開始',
+                angles: [-45, 44, 64],
+                wait: 60,
                 action: 'drop',
-                description: 'Releasing object'
+                description: 'Releasing object - WAIT FOR GRIPPER TO OPEN'
             },
             {
                 name: '後退',
                 angles: [-45, 5, 5],
-                wait: 40,
+                wait: 50,
                 action: null,
-                description: 'Retreating'
+                description: 'Retreating from platform'
             },
             {
                 name: '帰還',
@@ -743,30 +747,41 @@
             }
         }
 
-        // オブジェクト掴む
-        function grabBox() {
-            if (!isGripping) {
-                targetGripperState = 1;
-                // グリッパーが完全に閉じるまで待機してから掴む
-                setTimeout(() => {
-                    handGroup.attach(targetBox);
-                    isGripping = true;
-                    console.log('✓ Object gripped');
-                }, 300);
+        // オブジェクト掴む（実際の掴み動作）
+        function actuallyGrabBox() {
+            if (!isGripping && waitingForGrip) {
+                handGroup.attach(targetBox);
+                isGripping = true;
+                waitingForGrip = false;
+                console.log('✓ Object ACTUALLY gripped! Box is now child of gripper.');
             }
         }
 
-        // オブジェクト離す
-        function dropBox() {
-            if (isGripping) {
+        // オブジェクト離す（実際の離し動作）
+        function actuallyReleaseBox() {
+            if (isGripping && waitingForRelease) {
                 scene.attach(targetBox);
-                targetGripperState = 0;
                 isGripping = false;
+                waitingForRelease = false;
                 // 床面に配置
                 targetBox.position.y = 0.2;
                 targetBox.rotation.set(0, 0, 0);
-                console.log('✓ Object released');
+                console.log('✓ Object ACTUALLY released! Box is now independent.');
             }
+        }
+
+        // グリッパーを閉じる命令
+        function startGripping() {
+            console.log('→ Starting grip sequence...');
+            targetGripperState = 1;
+            waitingForGrip = true;
+        }
+
+        // グリッパーを開く命令
+        function startReleasing() {
+            console.log('→ Starting release sequence...');
+            targetGripperState = 0;
+            waitingForRelease = true;
         }
 
         // 自動化トグル
@@ -790,9 +805,13 @@
 
             // オブジェクトをリセット
             if (isGripping) {
-                dropBox();
+                scene.attach(targetBox);
+                isGripping = false;
             }
+            waitingForGrip = false;
+            waitingForRelease = false;
             targetBox.position.set(2.0, 0.2, 1.5);
+            targetGripperState = 0;
 
             updateStatus(true);
             updateStepIndicator();
@@ -896,8 +915,11 @@
             ui.in3.value = 0;
 
             if (isGripping) {
-                dropBox();
+                scene.attach(targetBox);
+                isGripping = false;
             }
+            waitingForGrip = false;
+            waitingForRelease = false;
             targetBox.position.set(2.0, 0.2, 1.5);
             targetGripperState = 0;
 
@@ -962,11 +984,11 @@
                         if (step.action === 'prepare_grab') {
                             targetGripperState = 0; // グリッパーを開く
                         } else if (step.action === 'grab') {
-                            grabBox();
+                            startGripping(); // グリッパーを閉じ始める
                         } else if (step.action === 'prepare_drop') {
                             // 配置準備
                         } else if (step.action === 'drop') {
-                            dropBox();
+                            startReleasing(); // グリッパーを開き始める
                         } else if (step.action === 'finish') {
                             isAutomating = false;
                             updateStatus(false);
@@ -1009,6 +1031,16 @@
 
             // グリッパー更新
             updateGripper();
+
+            // グリッパー状態に応じてオブジェクトを掴む/離す
+            if (waitingForGrip && gripperState > 0.95) {
+                // グリッパーがほぼ完全に閉じた
+                actuallyGrabBox();
+            }
+            if (waitingForRelease && gripperState < 0.05) {
+                // グリッパーがほぼ完全に開いた
+                actuallyReleaseBox();
+            }
 
             // UI更新
             ui.val1.textContent = Math.round(cur.j1) + "°";
