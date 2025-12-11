@@ -362,7 +362,6 @@
         <div class="step-dot"></div>
         <div class="step-dot"></div>
         <div class="step-dot"></div>
-        <div class="step-dot"></div>
     </div>
 
     <!-- コントロールパネル -->
@@ -606,19 +605,19 @@
 
         // --- 4. オブジェクトとプラットフォーム ---
 
-        // ターゲットボックス
+        // ターゲットボックス - 原点近くの簡単な位置
         const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
         const boxMat = new THREE.MeshPhongMaterial({
             color: CONFIG.colors.box,
             shininess: 60
         });
         const targetBox = new THREE.Mesh(boxGeo, boxMat);
-        targetBox.position.set(1.8, 0.2, 0.8); // ロボットが確実に届く位置
+        targetBox.position.set(0, 0.2, 2.0); // 原点の前方、届きやすい
         targetBox.castShadow = true;
         targetBox.receiveShadow = true;
         scene.add(targetBox);
 
-        // 配置プラットフォーム
+        // 配置プラットフォーム - 原点近くの簡単な位置
         const platformGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.3, 32);
         const platformMat = new THREE.MeshPhongMaterial({
             color: CONFIG.colors.platform,
@@ -627,7 +626,7 @@
             shininess: 100
         });
         const platform = new THREE.Mesh(platformGeo, platformMat);
-        platform.position.set(-3.0, 0.15, 0.8); // ロボットが確実に届く位置
+        platform.position.set(0, 0.15, -2.0); // 原点の後方
         platform.castShadow = true;
         platform.receiveShadow = true;
         scene.add(platform);
@@ -656,7 +655,7 @@
         let waitingForGrip = false; // グリッパーが閉じるのを待っている
         let waitingForRelease = false; // グリッパーが開くのを待っている
 
-        // シーケンス定義（より詳細に）
+        // シーケンス定義（シンプルで確実な動作）
         const sequence = [
             {
                 name: 'ホームポジション',
@@ -667,63 +666,56 @@
             },
             {
                 name: 'アプローチ',
-                angles: [33, 5, 10],
+                angles: [0, 10, 20],
                 wait: 50,
                 action: null,
-                description: 'Approaching target'
+                description: 'Approaching target - moving forward'
             },
             {
                 name: '掴む準備',
-                angles: [33, 30, 45],
+                angles: [0, 40, 60],
                 wait: 40,
                 action: 'prepare_grab',
-                description: 'Preparing to grab - opening gripper'
+                description: 'Positioning above object - gripper opening'
             },
             {
                 name: 'グリップ',
-                angles: [33, 42, 60],
-                wait: 70,
+                angles: [0, 45, 70],
+                wait: 80,
                 action: 'grab',
-                description: 'Gripping object at exact position'
+                description: 'Gripping object - WAIT FOR CLOSE'
             },
             {
                 name: '持ち上げ',
-                angles: [33, 5, 10],
+                angles: [0, 5, 10],
                 wait: 60,
                 action: null,
-                description: 'Lifting object with gripper'
+                description: 'Lifting object upward'
             },
             {
-                name: '移動開始',
-                angles: [0, 5, 10],
-                wait: 50,
+                name: '回転',
+                angles: [180, 5, 10],
+                wait: 80,
                 action: null,
-                description: 'Rotating to platform'
-            },
-            {
-                name: '移動',
-                angles: [-58, 5, 10],
-                wait: 70,
-                action: null,
-                description: 'Carrying object to platform'
+                description: 'Rotating 180 degrees to platform'
             },
             {
                 name: '配置準備',
-                angles: [-58, 30, 45],
+                angles: [180, 40, 60],
                 wait: 50,
                 action: 'prepare_drop',
                 description: 'Positioning above platform'
             },
             {
                 name: 'リリース',
-                angles: [-58, 42, 60],
-                wait: 70,
+                angles: [180, 45, 70],
+                wait: 80,
                 action: 'drop',
-                description: 'Releasing object on platform'
+                description: 'Releasing object - WAIT FOR OPEN'
             },
             {
                 name: '後退',
-                angles: [-58, 5, 5],
+                angles: [180, 5, 10],
                 wait: 50,
                 action: null,
                 description: 'Retreating from platform'
@@ -733,7 +725,7 @@
                 angles: [0, 0, 0],
                 wait: 0,
                 action: 'finish',
-                description: 'Returning home'
+                description: 'Returning to home position'
             }
         ];
 
@@ -849,7 +841,7 @@
             }
             waitingForGrip = false;
             waitingForRelease = false;
-            targetBox.position.set(1.8, 0.2, 0.8);
+            targetBox.position.set(0, 0.2, 2.0);
             targetBox.rotation.set(0, 0, 0);
             targetGripperState = 0;
 
@@ -960,7 +952,7 @@
             }
             waitingForGrip = false;
             waitingForRelease = false;
-            targetBox.position.set(1.8, 0.2, 0.8);
+            targetBox.position.set(0, 0.2, 2.0);
             targetBox.rotation.set(0, 0, 0);
             targetGripperState = 0;
 
