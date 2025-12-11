@@ -362,6 +362,7 @@
         <div class="step-dot"></div>
         <div class="step-dot"></div>
         <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <!-- コントロールパネル -->
@@ -612,7 +613,7 @@
             shininess: 60
         });
         const targetBox = new THREE.Mesh(boxGeo, boxMat);
-        targetBox.position.set(1.5, 0.2, 1.0); // ロボットが届きやすい位置に調整
+        targetBox.position.set(1.8, 0.2, 0.8); // ロボットが確実に届く位置
         targetBox.castShadow = true;
         targetBox.receiveShadow = true;
         scene.add(targetBox);
@@ -626,7 +627,7 @@
             shininess: 100
         });
         const platform = new THREE.Mesh(platformGeo, platformMat);
-        platform.position.set(-2.5, 0.15, 1.2); // 配置しやすい位置に調整
+        platform.position.set(-3.0, 0.15, 0.8); // ロボットが確実に届く位置
         platform.castShadow = true;
         platform.receiveShadow = true;
         scene.add(platform);
@@ -666,56 +667,63 @@
             },
             {
                 name: 'アプローチ',
-                angles: [30, 10, 15],
-                wait: 40,
+                angles: [33, 5, 10],
+                wait: 50,
                 action: null,
                 description: 'Approaching target'
             },
             {
                 name: '掴む準備',
-                angles: [30, 35, 50],
+                angles: [33, 30, 45],
                 wait: 40,
                 action: 'prepare_grab',
-                description: 'Preparing to grab'
+                description: 'Preparing to grab - opening gripper'
             },
             {
-                name: 'グリップ開始',
-                angles: [30, 40, 60],
-                wait: 60,
+                name: 'グリップ',
+                angles: [33, 42, 60],
+                wait: 70,
                 action: 'grab',
-                description: 'Gripping object - WAIT FOR GRIPPER TO CLOSE'
+                description: 'Gripping object at exact position'
             },
             {
                 name: '持ち上げ',
-                angles: [30, 8, 12],
+                angles: [33, 5, 10],
                 wait: 60,
                 action: null,
                 description: 'Lifting object with gripper'
             },
             {
+                name: '移動開始',
+                angles: [0, 5, 10],
+                wait: 50,
+                action: null,
+                description: 'Rotating to platform'
+            },
+            {
                 name: '移動',
-                angles: [-50, 8, 12],
+                angles: [-58, 5, 10],
                 wait: 70,
                 action: null,
                 description: 'Carrying object to platform'
             },
             {
-                name: '配置位置',
-                angles: [-50, 38, 58],
+                name: '配置準備',
+                angles: [-58, 30, 45],
                 wait: 50,
                 action: 'prepare_drop',
-                description: 'Positioning for placement'
+                description: 'Positioning above platform'
             },
             {
-                name: 'リリース開始',
-                angles: [-50, 40, 60],
-                wait: 60,
+                name: 'リリース',
+                angles: [-58, 42, 60],
+                wait: 70,
                 action: 'drop',
-                description: 'Releasing object - WAIT FOR GRIPPER TO OPEN'
+                description: 'Releasing object on platform'
             },
             {
                 name: '後退',
-                angles: [-50, 5, 5],
+                angles: [-58, 5, 5],
                 wait: 50,
                 action: null,
                 description: 'Retreating from platform'
@@ -773,42 +781,31 @@
                 console.log('📦 Box position:', boxPos);
                 console.log('📏 Distance:', gripperPos.distanceTo(boxPos));
 
-                // オブジェクトをグリッパーの子にする
-                handGroup.add(targetBox);
-
-                // ローカル座標でグリッパーの前面（少し下）に配置
-                targetBox.position.set(0, 0.35, 0);
-                targetBox.rotation.set(0, 0, 0);
+                // attach()を使用してワールド座標を保持したまま親を変更
+                handGroup.attach(targetBox);
 
                 isGripping = true;
                 waitingForGrip = false;
-                console.log('✅ Object GRIPPED! Now attached to gripper at local position (0, 0.35, 0)');
+                console.log('✅ Object GRIPPED! Using attach() - world position preserved');
             }
         }
 
         // オブジェクト離す（実際の離し動作）
         function actuallyReleaseBox() {
             if (isGripping && waitingForRelease) {
-                // 現在のワールド座標を保存
-                const worldPos = new THREE.Vector3();
-                const worldQuat = new THREE.Quaternion();
-                targetBox.getWorldPosition(worldPos);
-                targetBox.getWorldQuaternion(worldQuat);
+                // attach()を使用してワールド座標を保持したままシーンに戻す
+                scene.attach(targetBox);
 
-                // シーンに戻す
-                scene.add(targetBox);
-
-                // ワールド座標を復元
-                targetBox.position.copy(worldPos);
-                targetBox.quaternion.copy(worldQuat);
-
-                // 床面にスナップ
-                targetBox.position.y = 0.2;
+                // プラットフォームの上に配置（高さを調整）
+                targetBox.position.y = 0.35; // プラットフォームの高さ(0.15) + ボックスの半分(0.2)
                 targetBox.rotation.set(0, 0, 0);
 
                 isGripping = false;
                 waitingForRelease = false;
-                console.log('✅ Object RELEASED at position:', worldPos);
+
+                const finalPos = new THREE.Vector3();
+                targetBox.getWorldPosition(finalPos);
+                console.log('✅ Object RELEASED at position:', finalPos);
             }
         }
 
@@ -852,7 +849,7 @@
             }
             waitingForGrip = false;
             waitingForRelease = false;
-            targetBox.position.set(1.5, 0.2, 1.0);
+            targetBox.position.set(1.8, 0.2, 0.8);
             targetBox.rotation.set(0, 0, 0);
             targetGripperState = 0;
 
@@ -963,7 +960,7 @@
             }
             waitingForGrip = false;
             waitingForRelease = false;
-            targetBox.position.set(1.5, 0.2, 1.0);
+            targetBox.position.set(1.8, 0.2, 0.8);
             targetBox.rotation.set(0, 0, 0);
             targetGripperState = 0;
 
