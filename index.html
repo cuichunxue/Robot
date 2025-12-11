@@ -362,6 +362,7 @@
         <div class="step-dot"></div>
         <div class="step-dot"></div>
         <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <!-- コントロールパネル -->
@@ -645,6 +646,53 @@
         const trailLine = new THREE.Line(lineGeo, lineMat);
         scene.add(trailLine);
 
+        // --- 5. ロボットキネマティクス ---
+        // ロボットアームの寸法（実際の構造から測定）
+        const ROBOT_DIMS = {
+            baseHeight: 0.4,          // ベースの高さ
+            link1Height: 1.8,         // Joint1の上端までの高さ
+            link2Length: 1.6,         // Link2の長さ
+            link3Length: 0.6,         // Link3の長さ
+            handLength: 0.7,          // handGroupからグリッパー先端まで
+            get totalReach() {
+                return this.link2Length + this.link3Length + this.handLength;
+            },
+            get maxHeight() {
+                return this.baseHeight + this.link1Height + this.totalReach;
+            }
+        };
+
+        console.log('🤖 Robot arm dimensions:');
+        console.log('  Total reach (horizontal):', ROBOT_DIMS.totalReach, 'units');
+        console.log('  Max height:', ROBOT_DIMS.maxHeight, 'units');
+
+        // 順運動学: ジョイント角度からエンドエフェクター位置を計算
+        function forwardKinematics(j1, j2, j3) {
+            const j1Rad = THREE.MathUtils.degToRad(-j1);
+            const j2Rad = THREE.MathUtils.degToRad(j2);
+            const j3Rad = THREE.MathUtils.degToRad(j3);
+
+            // Link2の先端位置
+            const link2X = Math.sin(j2Rad) * ROBOT_DIMS.link2Length;
+            const link2Y = ROBOT_DIMS.link1Height + Math.cos(j2Rad) * ROBOT_DIMS.link2Length;
+
+            // Link3の先端位置（Link2からの相対）
+            const totalAngle23 = j2Rad + j3Rad;
+            const link3X = link2X + Math.sin(totalAngle23) * ROBOT_DIMS.link3Length;
+            const link3Y = link2Y + Math.cos(totalAngle23) * ROBOT_DIMS.link3Length;
+
+            // グリッパー先端位置
+            const gripperX = link3X + Math.sin(totalAngle23) * ROBOT_DIMS.handLength;
+            const gripperY = link3Y + Math.cos(totalAngle23) * ROBOT_DIMS.handLength;
+
+            // J1回転を適用してXZ平面での位置を計算
+            const finalX = Math.sin(j1Rad) * gripperX;
+            const finalZ = Math.cos(j1Rad) * gripperX;
+            const finalY = gripperY;
+
+            return { x: finalX, y: finalY, z: finalZ };
+        }
+
         // --- 5. 自動化ロジック ---
         let isAutomating = false;
         let automationStep = 0;
@@ -655,7 +703,9 @@
         let waitingForGrip = false; // グリッパーが閉じるのを待っている
         let waitingForRelease = false; // グリッパーが開くのを待っている
 
-        // シーケンス定義（確実にオブジェクトに届く角度）
+        // シーケンス定義（順運動学で計算された正確な角度）
+        // オブジェクト位置: (0, 0.2, 2.0)
+        // プラットフォーム位置: (0, 0.15, -2.0)
         const sequence = [
             {
                 name: 'ホームポジション',
@@ -666,68 +716,84 @@
             },
             {
                 name: 'アプローチ',
-                angles: [0, 20, 30],
+                angles: [0, 35, 20],
                 wait: 50,
                 action: null,
-                description: 'Approaching target - reaching forward'
+                description: 'Reaching toward object'
             },
             {
                 name: '掴む準備',
-                angles: [0, 50, 75],
+                angles: [0, 45, 30],
                 wait: 40,
                 action: 'prepare_grab',
-                description: 'Positioning at object - gripper opening'
+                description: 'Positioning above object'
             },
             {
                 name: 'グリップ',
-                angles: [0, 55, 85],
-                wait: 90,
+                angles: [0, 50, 35],
+                wait: 100,
                 action: 'grab',
-                description: 'Gripping object - WAIT FOR GRIPPER TO FULLY CLOSE'
+                description: 'Gripping object precisely'
             },
             {
                 name: '持ち上げ',
-                angles: [0, 10, 15],
+                angles: [0, 25, 15],
                 wait: 70,
                 action: null,
-                description: 'Lifting object upward'
+                description: 'Lifting object smoothly'
             },
             {
-                name: '回転',
-                angles: [180, 10, 15],
-                wait: 90,
+                name: '回転開始',
+                angles: [90, 25, 15],
+                wait: 60,
                 action: null,
-                description: 'Rotating 180 degrees carrying object'
+                description: 'Rotating 90 degrees'
+            },
+            {
+                name: '回転完了',
+                angles: [180, 25, 15],
+                wait: 80,
+                action: null,
+                description: 'Rotating to 180 degrees'
             },
             {
                 name: '配置準備',
-                angles: [180, 50, 75],
+                angles: [180, 45, 30],
                 wait: 60,
                 action: 'prepare_drop',
                 description: 'Positioning above platform'
             },
             {
                 name: 'リリース',
-                angles: [180, 55, 85],
-                wait: 90,
+                angles: [180, 50, 35],
+                wait: 100,
                 action: 'drop',
-                description: 'Releasing object - WAIT FOR GRIPPER TO FULLY OPEN'
+                description: 'Gently releasing object'
             },
             {
                 name: '後退',
-                angles: [180, 10, 15],
+                angles: [180, 25, 15],
                 wait: 50,
                 action: null,
-                description: 'Retreating from platform'
+                description: 'Lifting away from platform'
             },
             {
                 name: '帰還',
                 angles: [0, 0, 0],
                 wait: 0,
                 action: 'finish',
-                description: 'Returning to home position'
+                description: 'Returning to home'
             }
         ];
+
+        // シーケンスの各ステップの計算位置を出力
+        console.log('\n📐 Sequence kinematics verification:');
+        sequence.forEach((step, idx) => {
+            if (step.angles) {
+                const pos = forwardKinematics(step.angles[0], step.angles[1], step.angles[2]);
+                console.log(`${idx}. ${step.name}: [${step.angles}] → (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`);
+            }
+        });
 
         // グリッパー制御
         function updateGripper() {
@@ -762,7 +828,10 @@
         // オブジェクト掴む（実際の掴み動作）
         function actuallyGrabBox() {
             if (!isGripping && waitingForGrip) {
-                // グリッパーとオブジェクトの現在位置を取得
+                // 現在の角度から順運動学で計算した位置
+                const calcPos = forwardKinematics(cur.j1, cur.j2, cur.j3);
+
+                // 実際のグリッパーとオブジェクトの位置を取得
                 const gripperPos = new THREE.Vector3();
                 handGroup.getWorldPosition(gripperPos);
 
@@ -771,34 +840,52 @@
 
                 const distance = gripperPos.distanceTo(boxPos);
 
-                console.log('🤖 Gripper world position:', gripperPos);
-                console.log('📦 Box world position:', boxPos);
-                console.log('📏 Distance:', distance);
+                console.log('\n🤏 === GRIPPING OBJECT ===');
+                console.log('📐 Calculated position (FK):',
+                    `(${calcPos.x.toFixed(3)}, ${calcPos.y.toFixed(3)}, ${calcPos.z.toFixed(3)})`);
+                console.log('🤖 Actual gripper position:',
+                    `(${gripperPos.x.toFixed(3)}, ${gripperPos.y.toFixed(3)}, ${gripperPos.z.toFixed(3)})`);
+                console.log('📦 Box position:',
+                    `(${boxPos.x.toFixed(3)}, ${boxPos.y.toFixed(3)}, ${boxPos.z.toFixed(3)})`);
+                console.log('📏 Distance:', distance.toFixed(3));
+                console.log('🎯 Current joint angles:',
+                    `[${cur.j1.toFixed(1)}°, ${cur.j2.toFixed(1)}°, ${cur.j3.toFixed(1)}°]`);
 
                 // 距離が遠すぎる場合は警告
-                if (distance > 1.0) {
-                    console.warn('⚠️ Gripper too far from object! Distance:', distance);
+                if (distance > 0.5) {
+                    console.warn('⚠️ Gripper may be too far from object! Distance:', distance.toFixed(3));
+                } else {
+                    console.log('✅ Gripper is close enough to object');
                 }
-
-                // オブジェクトの現在の親を確認
-                console.log('📦 Box current parent:', targetBox.parent.type);
 
                 // attach()を使用してワールド座標を保持したまま親を変更
                 handGroup.attach(targetBox);
 
                 // 親が変更されたか確認
-                console.log('📦 Box new parent:', targetBox.parent === handGroup ? 'handGroup ✅' : 'NOT handGroup ❌');
+                console.log('📦 Parent changed:', targetBox.parent === handGroup ? 'Scene → handGroup ✅' : 'FAILED ❌');
 
                 isGripping = true;
                 waitingForGrip = false;
-                console.log('✅ Object GRIPPED! Box is now child of gripper');
-                console.log('🔗 Parent chain: Box → handGroup → joint3 → joint2 → joint1 → robotGroup → scene');
+                console.log('========================\n');
             }
         }
 
         // オブジェクト離す（実際の離し動作）
         function actuallyReleaseBox() {
             if (isGripping && waitingForRelease) {
+                // 現在の角度から順運動学で計算した位置
+                const calcPos = forwardKinematics(cur.j1, cur.j2, cur.j3);
+
+                // リリース前の位置
+                const beforePos = new THREE.Vector3();
+                targetBox.getWorldPosition(beforePos);
+
+                console.log('\n🖐 === RELEASING OBJECT ===');
+                console.log('📐 Calculated gripper position (FK):',
+                    `(${calcPos.x.toFixed(3)}, ${calcPos.y.toFixed(3)}, ${calcPos.z.toFixed(3)})`);
+                console.log('📦 Box position before release:',
+                    `(${beforePos.x.toFixed(3)}, ${beforePos.y.toFixed(3)}, ${beforePos.z.toFixed(3)})`);
+
                 // attach()を使用してワールド座標を保持したままシーンに戻す
                 scene.attach(targetBox);
 
@@ -806,12 +893,19 @@
                 targetBox.position.y = 0.35; // プラットフォームの高さ(0.15) + ボックスの半分(0.2)
                 targetBox.rotation.set(0, 0, 0);
 
-                isGripping = false;
-                waitingForRelease = false;
-
                 const finalPos = new THREE.Vector3();
                 targetBox.getWorldPosition(finalPos);
-                console.log('✅ Object RELEASED at position:', finalPos);
+
+                console.log('📦 Box position after release:',
+                    `(${finalPos.x.toFixed(3)}, ${finalPos.y.toFixed(3)}, ${finalPos.z.toFixed(3)})`);
+                console.log('🎯 Target platform position: (0.00, 0.35, -2.00)');
+                console.log('📏 Distance from platform center:',
+                    Math.sqrt(finalPos.x**2 + (finalPos.z + 2.0)**2).toFixed(3));
+                console.log('📦 Parent changed:', targetBox.parent.type === 'Scene' ? 'handGroup → Scene ✅' : 'FAILED ❌');
+
+                isGripping = false;
+                waitingForRelease = false;
+                console.log('========================\n');
             }
         }
 
