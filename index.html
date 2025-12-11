@@ -130,8 +130,16 @@
                 accent: 0xffaa00,
                 box: 0xff4444
             },
-            smoothness: 0.08, // 動きの遅れ係数 (小さいほど重厚)
-            autoSpeed: 2      // 自動再生時の待機時間倍率
+            smoothness: 0.12, // 動きの遅れ係数 (少し速く)
+            autoSpeed: 2,     // 自動再生時の待機時間倍率
+            // ロボットアームのリンク長（実際の3Dモデルに合わせる）
+            robot: {
+                baseHeight: 0.4,      // ベースの高さ
+                link1Height: 1.8,     // Joint1からJoint2までの高さ
+                link2Length: 1.8,     // Link2の長さ（Joint2からJoint3）
+                link3Length: 0.7,     // Link3の長さ（Joint3からハンド）
+                gripperLength: 0.5    // グリッパーの長さ
+            }
         };
 
         // --- 2. THREE.JS SETUP ---
@@ -236,27 +244,60 @@
         const handGroup = new THREE.Group();
         handGroup.position.y = 0.7;
         joint3.add(handGroup);
-        
-        const handBase = new THREE.Mesh(new THREE.SphereGeometry(0.25), matAccent);
+
+        const handBase = new THREE.Mesh(new THREE.SphereGeometry(0.2), matAccent);
         handGroup.add(handBase);
-        
-        // Gripper fingers
-        const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f1.position.set(0.15, 0.3, 0);
-        handGroup.add(f1);
-        const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f2.position.set(-0.15, 0.3, 0);
-        handGroup.add(f2);
+
+        // Gripper fingers (保存して後でアニメーション)
+        const fingerLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.08), matJoint);
+        fingerLeft.position.set(0.2, 0.25, 0);
+        handGroup.add(fingerLeft);
+        const fingerRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.08), matJoint);
+        fingerRight.position.set(-0.2, 0.25, 0);
+        handGroup.add(fingerRight);
+
+        // グリッパーの開閉状態 (0=開, 1=閉)
+        let gripperState = 0;
+        let gripperTarget = 0;
+        const GRIPPER_OPEN_POS = 0.2;
+        const GRIPPER_CLOSED_POS = 0.1;
 
         // --- 4. OBJECTS & TRAJECTORY ---
-        
+
+        // ボックスの設定 (ロボットの到達範囲内に配置)
+        const BOX_SIZE = 0.3;
+        const BOX_INITIAL_POS = new THREE.Vector3(1.5, BOX_SIZE / 2, 1.0);
+        const DROP_TARGET_POS = new THREE.Vector3(-1.2, BOX_SIZE / 2, 1.0);
+
         // Target Box
-        const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        const boxGeo = new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE);
         const boxMat = new THREE.MeshPhongMaterial({ color: CONFIG.colors.box });
         const targetBox = new THREE.Mesh(boxGeo, boxMat);
-        targetBox.position.set(2.0, 0.2, 1.5); // Initial Position
+        targetBox.position.copy(BOX_INITIAL_POS);
         targetBox.castShadow = true;
         scene.add(targetBox);
+
+        // 掴み状態の追跡
+        let isGrabbing = false;
+        let grabOffset = new THREE.Vector3();
+
+        // ピックアップ位置のマーカー（緑のプレート）
+        const pickupPlatform = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 0.05, 32),
+            new THREE.MeshPhongMaterial({ color: 0x22aa44, transparent: true, opacity: 0.6 })
+        );
+        pickupPlatform.position.set(BOX_INITIAL_POS.x, 0.025, BOX_INITIAL_POS.z);
+        pickupPlatform.receiveShadow = true;
+        scene.add(pickupPlatform);
+
+        // ドロップターゲットの台（オレンジのプレート）
+        const dropPlatform = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 0.05, 32),
+            new THREE.MeshPhongMaterial({ color: 0xff8800, transparent: true, opacity: 0.6 })
+        );
+        dropPlatform.position.set(DROP_TARGET_POS.x, 0.025, DROP_TARGET_POS.z);
+        dropPlatform.receiveShadow = true;
+        scene.add(dropPlatform);
 
         // Trajectory Line
         const maxPoints = 300;
@@ -267,46 +308,220 @@
         const trailLine = new THREE.Line(lineGeo, lineMat);
         scene.add(trailLine);
 
-        // --- 5. AUTOMATION LOGIC ---
+        // --- 5. KINEMATICS & AUTOMATION LOGIC ---
+
+        // 逆運動学 (IK) - 目標位置から各関節角度を計算
+        function calculateIK(targetPos, heightOffset = 0) {
+            const R = CONFIG.robot;
+            // ベースからの相対位置
+            const x = targetPos.x;
+            const z = targetPos.z;
+            const y = targetPos.y + heightOffset;
+
+            // Joint1 (ベースの回転) - XZ平面での角度
+            const j1 = Math.atan2(x, z) * (180 / Math.PI);
+
+            // 水平距離
+            const horizontalDist = Math.sqrt(x * x + z * z);
+
+            // Joint2の高さ（ベースから）
+            const baseToJ2Height = R.baseHeight + R.link1Height; // 0.4 + 1.8 = 2.2
+            const L2 = R.link2Length;  // 1.8
+            const L3 = R.link3Length + R.gripperLength; // 0.7 + 0.5 = 1.2
+
+            // ターゲットからJoint2への相対ベクトル
+            const relativeY = y - baseToJ2Height;
+            const reachDist = Math.sqrt(horizontalDist * horizontalDist + relativeY * relativeY);
+
+            let j2, j3;
+
+            // 腕が届く範囲をチェック
+            const maxReach = L2 + L3;
+            const minReach = Math.abs(L2 - L3);
+
+            if (reachDist >= maxReach) {
+                // 届かない - 腕を完全に伸ばす
+                const targetAngle = Math.atan2(relativeY, horizontalDist);
+                j2 = (Math.PI / 2 - targetAngle) * (180 / Math.PI);
+                j3 = 0;
+            } else if (reachDist <= minReach) {
+                // 近すぎる - 肘を曲げる
+                j2 = 45;
+                j3 = 90;
+            } else {
+                // 余弦定理で角度計算 (2リンクロボットアームのIK)
+                // 肘の角度 (j3)
+                const cosElbow = (L2 * L2 + L3 * L3 - reachDist * reachDist) / (2 * L2 * L3);
+                const elbowAngle = Math.acos(Math.max(-1, Math.min(1, cosElbow)));
+                j3 = (Math.PI - elbowAngle) * (180 / Math.PI);
+
+                // 肩の角度 (j2)
+                const cosShoulder = (L2 * L2 + reachDist * reachDist - L3 * L3) / (2 * L2 * reachDist);
+                const shoulderAngle = Math.acos(Math.max(-1, Math.min(1, cosShoulder)));
+                const targetAngle = Math.atan2(relativeY, horizontalDist);
+
+                // j2は垂直からの角度
+                j2 = (shoulderAngle - targetAngle) * (180 / Math.PI);
+            }
+
+            // 関節の制限を適用
+            j2 = Math.max(-45, Math.min(90, j2));
+            j3 = Math.max(-90, Math.min(90, j3));
+
+            return { j1, j2, j3 };
+        }
+
+        // 順運動学 (FK) - 現在の関節角度からエンドエフェクタ位置を計算
+        function calculateFK(j1Deg, j2Deg, j3Deg) {
+            const R = CONFIG.robot;
+            const j1 = j1Deg * (Math.PI / 180);
+            const j2 = j2Deg * (Math.PI / 180);
+            const j3 = j3Deg * (Math.PI / 180);
+
+            const baseToJ2Height = R.baseHeight + R.link1Height;
+            const L2 = R.link2Length;
+            const L3 = R.link3Length + R.gripperLength;
+
+            // Link2の先端位置
+            const l2X = L2 * Math.sin(j2);
+            const l2Y = L2 * Math.cos(j2);
+
+            // Link3の先端位置（Link2からの相対）
+            const totalAngle = j2 + j3;
+            const l3X = L3 * Math.sin(totalAngle);
+            const l3Y = L3 * Math.cos(totalAngle);
+
+            // 合計の水平・垂直距離
+            const horizontalDist = l2X + l3X;
+            const verticalDist = baseToJ2Height + l2Y + l3Y;
+
+            // XZ平面での座標
+            const x = horizontalDist * Math.sin(j1);
+            const z = horizontalDist * Math.cos(j1);
+            const y = verticalDist;
+
+            return new THREE.Vector3(x, y, z);
+        }
+
         let isAutomating = false;
         let automationStep = 0;
         let stepTimer = 0;
+        let sequence = [];
 
-        // Sequence: Angles [J1, J2, J3], WaitFrames, Action
-        const sequence = [
-            { a: [0, 0, 0], w: 60, type: 'move' }, // Home
-            { a: [37, 20, 25], w: 30, type: 'move' }, // Approach
-            { a: [37, 45, 60], w: 40, type: 'grab' }, // Grab Position
-            { a: [37, 10, 10], w: 40, type: 'move' }, // Lift
-            { a: [-40, 10, 10], w: 40, type: 'move' }, // Carry
-            { a: [-40, 45, 60], w: 40, type: 'drop' }, // Place Position
-            { a: [-40, 0, 0], w: 40, type: 'move' }, // Retreat
-            { a: [0, 0, 0], w: 0, type: 'finish' } // Return Home
-        ];
+        // シーケンスを動的に生成
+        function generateSequence() {
+            const pickPos = BOX_INITIAL_POS.clone();
+            pickPos.y = BOX_SIZE + 0.1; // ボックスの上面 + マージン
 
-        function grabBox() {
-            // Three.js magic: Attach preserves world transform while changing parent
-            handGroup.attach(targetBox);
+            const approachPick = pickPos.clone();
+            approachPick.y += 0.5; // 上からアプローチ
+
+            const dropPos = DROP_TARGET_POS.clone();
+            dropPos.y = BOX_SIZE + 0.1;
+
+            const approachDrop = dropPos.clone();
+            approachDrop.y += 0.5;
+
+            const liftPos = pickPos.clone();
+            liftPos.y += 0.8;
+
+            const homeAngles = { j1: 0, j2: 0, j3: 0 };
+            const approachPickAngles = calculateIK(approachPick);
+            const pickAngles = calculateIK(pickPos);
+            const liftAngles = calculateIK(liftPos);
+            const approachDropAngles = calculateIK(approachDrop);
+            const dropAngles = calculateIK(dropPos);
+
+            return [
+                { a: [homeAngles.j1, homeAngles.j2, homeAngles.j3], w: 30, type: 'open' },
+                { a: [approachPickAngles.j1, approachPickAngles.j2, approachPickAngles.j3], w: 20, type: 'move' },
+                { a: [pickAngles.j1, pickAngles.j2, pickAngles.j3], w: 30, type: 'move' },
+                { a: [pickAngles.j1, pickAngles.j2, pickAngles.j3], w: 40, type: 'grab' },
+                { a: [liftAngles.j1, liftAngles.j2, liftAngles.j3], w: 30, type: 'move' },
+                { a: [approachDropAngles.j1, approachDropAngles.j2, approachDropAngles.j3], w: 30, type: 'move' },
+                { a: [dropAngles.j1, dropAngles.j2, dropAngles.j3], w: 30, type: 'move' },
+                { a: [dropAngles.j1, dropAngles.j2, dropAngles.j3], w: 40, type: 'drop' },
+                { a: [approachDropAngles.j1, approachDropAngles.j2, approachDropAngles.j3], w: 20, type: 'move' },
+                { a: [homeAngles.j1, homeAngles.j2, homeAngles.j3], w: 0, type: 'finish' }
+            ];
         }
 
-        function dropBox() {
-            scene.attach(targetBox);
-            // Snap to floor to avoid floating errors
-            targetBox.position.y = 0.2;
+        function updateGripper() {
+            // グリッパーの開閉をスムーズにアニメーション
+            gripperState += (gripperTarget - gripperState) * 0.15;
+
+            const pos = THREE.MathUtils.lerp(GRIPPER_OPEN_POS, GRIPPER_CLOSED_POS, gripperState);
+            fingerLeft.position.x = pos;
+            fingerRight.position.x = -pos;
+        }
+
+        function openGripper() {
+            gripperTarget = 0;
+        }
+
+        function closeGripper() {
+            gripperTarget = 1;
+        }
+
+        function grabBox() {
+            if (isGrabbing) return;
+
+            closeGripper();
+            isGrabbing = true;
+
+            // ボックスをハンドにアタッチ (ワールド座標を保持)
+            handGroup.attach(targetBox);
+
+            // ボックスをグリッパーの指の間に正確に配置
+            // 指の長さ (0.35) の中央付近にボックスを配置
+            targetBox.position.set(0, 0.15 + BOX_SIZE / 2, 0);
             targetBox.rotation.set(0, 0, 0);
         }
 
+        function dropBox() {
+            if (!isGrabbing) {
+                // 初期リセット時
+                targetBox.position.copy(BOX_INITIAL_POS);
+                targetBox.rotation.set(0, 0, 0);
+                return;
+            }
+
+            openGripper();
+
+            // ボックスのワールド位置を取得してからシーンに戻す
+            const worldPos = new THREE.Vector3();
+            targetBox.getWorldPosition(worldPos);
+
+            scene.attach(targetBox);
+
+            // 床の高さに正確に配置
+            targetBox.position.x = worldPos.x;
+            targetBox.position.y = BOX_SIZE / 2;
+            targetBox.position.z = worldPos.z;
+            targetBox.rotation.set(0, 0, 0);
+
+            isGrabbing = false;
+        }
+
         function toggleAutomation() {
-            if (isAutomating) return; // Already running
-            
+            if (isAutomating) return;
+
+            // 状態リセット
+            if (isGrabbing) {
+                scene.attach(targetBox);
+                isGrabbing = false;
+            }
+            targetBox.position.copy(BOX_INITIAL_POS);
+            targetBox.rotation.set(0, 0, 0);
+            openGripper();
+
+            // シーケンス生成
+            sequence = generateSequence();
+
             isAutomating = true;
             automationStep = 0;
             stepTimer = 0;
-            
-            // Reset Box
-            dropBox(); 
-            targetBox.position.set(2.0, 0.2, 1.5);
-            
+
             updateStatus(true);
         }
 
@@ -370,14 +585,32 @@
 
         function resetSim() {
             isAutomating = false;
+
+            // 掴み状態をリセット
+            if (isGrabbing) {
+                scene.attach(targetBox);
+                isGrabbing = false;
+            }
+
+            // 関節をリセット
             ui.in1.value = 0;
             ui.in2.value = 0;
             ui.in3.value = 0;
-            dropBox();
-            targetBox.position.set(2.0, 0.2, 1.5);
-            // Reset trail
+            cur.j1 = 0;
+            cur.j2 = 0;
+            cur.j3 = 0;
+
+            // ボックス位置をリセット
+            targetBox.position.copy(BOX_INITIAL_POS);
+            targetBox.rotation.set(0, 0, 0);
+
+            // グリッパーを開く
+            openGripper();
+
+            // 軌跡をリセット
             positions.fill(0);
             lineGeo.attributes.position.needsUpdate = true;
+
             updateStatus(false);
         }
 
@@ -408,65 +641,83 @@
 
             let t1, t2, t3; // Targets
 
-            if (isAutomating) {
+            if (isAutomating && sequence.length > 0) {
                 const step = sequence[automationStep];
                 t1 = step.a[0];
                 t2 = step.a[1];
                 t3 = step.a[2];
 
-                // Check distance to target
+                // 目標角度への距離をチェック
                 const d1 = Math.abs(cur.j1 - t1);
                 const d2 = Math.abs(cur.j2 - t2);
                 const d3 = Math.abs(cur.j3 - t3);
 
-                if (d1 < 0.5 && d2 < 0.5 && d3 < 0.5) {
+                // 目標に十分近づいたら
+                if (d1 < 1.0 && d2 < 1.0 && d3 < 1.0) {
                     stepTimer++;
                     if (stepTimer > step.w) {
-                        if(step.type === 'grab') grabBox();
-                        if(step.type === 'drop') dropBox();
-                        if(step.type === 'finish') isAutomating = false;
-                        
-                        if(isAutomating) automationStep++;
+                        // アクション実行
+                        switch (step.type) {
+                            case 'open':
+                                openGripper();
+                                break;
+                            case 'grab':
+                                grabBox();
+                                break;
+                            case 'drop':
+                                dropBox();
+                                break;
+                            case 'finish':
+                                isAutomating = false;
+                                break;
+                        }
+
+                        if (isAutomating && automationStep < sequence.length - 1) {
+                            automationStep++;
+                        }
                         stepTimer = 0;
                     }
                 }
-                
-                // Sync sliders to auto movement
-                ui.in1.value = cur.j1;
-                ui.in2.value = cur.j2;
-                ui.in3.value = cur.j3;
+
+                // スライダーを自動移動に同期
+                ui.in1.value = Math.round(cur.j1);
+                ui.in2.value = Math.round(cur.j2);
+                ui.in3.value = Math.round(cur.j3);
 
                 if (!isAutomating) updateStatus(false);
 
             } else {
-                // Manual Mode
+                // マニュアルモード
                 t1 = parseFloat(ui.in1.value);
                 t2 = parseFloat(ui.in2.value);
                 t3 = parseFloat(ui.in3.value);
             }
 
-            // Physics: Smoothing (Lerp)
+            // 物理: スムージング (Lerp)
             cur.j1 += (t1 - cur.j1) * CONFIG.smoothness;
             cur.j2 += (t2 - cur.j2) * CONFIG.smoothness;
             cur.j3 += (t3 - cur.j3) * CONFIG.smoothness;
 
-            // Apply Rotations (Deg -> Rad)
+            // 回転を適用 (Deg -> Rad)
             joint1.rotation.y = THREE.MathUtils.degToRad(-cur.j1);
             joint2.rotation.z = THREE.MathUtils.degToRad(cur.j2);
             joint3.rotation.z = THREE.MathUtils.degToRad(cur.j3);
 
-            // UI Text Update
+            // グリッパーのアニメーション更新
+            updateGripper();
+
+            // UI テキスト更新
             ui.val1.textContent = Math.round(cur.j1) + "°";
             ui.val2.textContent = Math.round(cur.j2) + "°";
             ui.val3.textContent = Math.round(cur.j3) + "°";
 
-            // Chart Update
+            // チャート更新
             const velocity = (cur.j2 - prevJ2);
             prevJ2 = cur.j2;
             const cData = vChart.data.datasets[0].data;
             cData.shift();
-            cData.push(velocity * 2); // Scale for visibility
-            vChart.update('none'); // 'none' for performance
+            cData.push(velocity * 2);
+            vChart.update('none');
 
             updateTrail();
             renderer.render(scene, camera);
