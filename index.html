@@ -655,7 +655,7 @@
         let waitingForGrip = false; // グリッパーが閉じるのを待っている
         let waitingForRelease = false; // グリッパーが開くのを待っている
 
-        // シーケンス定義（シンプルで確実な動作）
+        // シーケンス定義（確実にオブジェクトに届く角度）
         const sequence = [
             {
                 name: 'ホームポジション',
@@ -666,56 +666,56 @@
             },
             {
                 name: 'アプローチ',
-                angles: [0, 10, 20],
+                angles: [0, 20, 30],
                 wait: 50,
                 action: null,
-                description: 'Approaching target - moving forward'
+                description: 'Approaching target - reaching forward'
             },
             {
                 name: '掴む準備',
-                angles: [0, 40, 60],
+                angles: [0, 50, 75],
                 wait: 40,
                 action: 'prepare_grab',
-                description: 'Positioning above object - gripper opening'
+                description: 'Positioning at object - gripper opening'
             },
             {
                 name: 'グリップ',
-                angles: [0, 45, 70],
-                wait: 80,
+                angles: [0, 55, 85],
+                wait: 90,
                 action: 'grab',
-                description: 'Gripping object - WAIT FOR CLOSE'
+                description: 'Gripping object - WAIT FOR GRIPPER TO FULLY CLOSE'
             },
             {
                 name: '持ち上げ',
-                angles: [0, 5, 10],
-                wait: 60,
+                angles: [0, 10, 15],
+                wait: 70,
                 action: null,
                 description: 'Lifting object upward'
             },
             {
                 name: '回転',
-                angles: [180, 5, 10],
-                wait: 80,
+                angles: [180, 10, 15],
+                wait: 90,
                 action: null,
-                description: 'Rotating 180 degrees to platform'
+                description: 'Rotating 180 degrees carrying object'
             },
             {
                 name: '配置準備',
-                angles: [180, 40, 60],
-                wait: 50,
+                angles: [180, 50, 75],
+                wait: 60,
                 action: 'prepare_drop',
                 description: 'Positioning above platform'
             },
             {
                 name: 'リリース',
-                angles: [180, 45, 70],
-                wait: 80,
+                angles: [180, 55, 85],
+                wait: 90,
                 action: 'drop',
-                description: 'Releasing object - WAIT FOR OPEN'
+                description: 'Releasing object - WAIT FOR GRIPPER TO FULLY OPEN'
             },
             {
                 name: '後退',
-                angles: [180, 5, 10],
+                angles: [180, 10, 15],
                 wait: 50,
                 action: null,
                 description: 'Retreating from platform'
@@ -769,16 +769,30 @@
                 const boxPos = new THREE.Vector3();
                 targetBox.getWorldPosition(boxPos);
 
-                console.log('🤖 Gripper position:', gripperPos);
-                console.log('📦 Box position:', boxPos);
-                console.log('📏 Distance:', gripperPos.distanceTo(boxPos));
+                const distance = gripperPos.distanceTo(boxPos);
+
+                console.log('🤖 Gripper world position:', gripperPos);
+                console.log('📦 Box world position:', boxPos);
+                console.log('📏 Distance:', distance);
+
+                // 距離が遠すぎる場合は警告
+                if (distance > 1.0) {
+                    console.warn('⚠️ Gripper too far from object! Distance:', distance);
+                }
+
+                // オブジェクトの現在の親を確認
+                console.log('📦 Box current parent:', targetBox.parent.type);
 
                 // attach()を使用してワールド座標を保持したまま親を変更
                 handGroup.attach(targetBox);
 
+                // 親が変更されたか確認
+                console.log('📦 Box new parent:', targetBox.parent === handGroup ? 'handGroup ✅' : 'NOT handGroup ❌');
+
                 isGripping = true;
                 waitingForGrip = false;
-                console.log('✅ Object GRIPPED! Using attach() - world position preserved');
+                console.log('✅ Object GRIPPED! Box is now child of gripper');
+                console.log('🔗 Parent chain: Box → handGroup → joint3 → joint2 → joint1 → robotGroup → scene');
             }
         }
 
@@ -1073,6 +1087,21 @@
             if (waitingForRelease && gripperState < 0.05) {
                 // グリッパーがほぼ完全に開いた
                 actuallyReleaseBox();
+            }
+
+            // デバッグ: フレームごとに親子関係を確認（掴んでいる時のみ）
+            if (isGripping && isAutomating) {
+                const boxWorldPos = new THREE.Vector3();
+                targetBox.getWorldPosition(boxWorldPos);
+                const gripperWorldPos = new THREE.Vector3();
+                handGroup.getWorldPosition(gripperWorldPos);
+                const dist = boxWorldPos.distanceTo(gripperWorldPos);
+
+                // 距離が離れすぎている場合は警告
+                if (dist > 0.5) {
+                    console.warn('⚠️ PROBLEM: Box drifting away from gripper! Distance:', dist.toFixed(3));
+                    console.log('Box parent:', targetBox.parent === handGroup ? 'handGroup' : targetBox.parent.type);
+                }
             }
 
             // UI更新
