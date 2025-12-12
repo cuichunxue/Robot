@@ -312,7 +312,8 @@
         // 逆運動学 (IK) - 目標位置から各関節角度を計算
         function calculateIK(targetX, targetY, targetZ) {
             // Joint1 (ベースの回転) - XZ平面での角度
-            const j1 = Math.atan2(targetX, targetZ) * (180 / Math.PI);
+            // ロボットの前方は+X方向なので、X軸からの角度を計算
+            const j1 = Math.atan2(targetZ, targetX) * (180 / Math.PI);
 
             // 水平距離（ベースからターゲットまで）
             const r = Math.sqrt(targetX * targetX + targetZ * targetZ);
@@ -395,8 +396,9 @@
             const y = shoulderHeight + link2Vertical + link3Vertical;
 
             // XZ座標（j1の回転を適用）
-            const x = horizontalDist * Math.sin(j1);
-            const z = horizontalDist * Math.cos(j1);
+            // ロボットの前方は+X方向、j1=0で+X方向を向く
+            const x = horizontalDist * Math.cos(j1);
+            const z = horizontalDist * Math.sin(j1);
 
             return { x, y, z };
         }
