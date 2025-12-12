@@ -256,10 +256,20 @@
 
         // --- 4. OBJECTS & TRAJECTORY ---
 
-        // ボックスの設定 (ロボットの正面と横に配置)
+        // ロボットの物理パラメータ
+        const ROBOT = {
+            BASE_HEIGHT: 0.4,      // joint1のY位置
+            L1: 1.8,               // joint1からjoint2までの高さ
+            L2: 1.8,               // link2の長さ（joint2からjoint3）
+            L3: 0.7,               // link3の長さ（joint3からhand）
+            SHOULDER_HEIGHT: 2.2   // BASE_HEIGHT + L1
+        };
+
+        // ボックスの設定
+        // J1=-90°で-Z方向、J1=90°で+Z方向
         const BOX_SIZE = 0.25;
-        const BOX_INITIAL_POS = new THREE.Vector3(2.0, BOX_SIZE / 2, 0);  // 正面
-        const DROP_TARGET_POS = new THREE.Vector3(0, BOX_SIZE / 2, 2.0);  // 左横
+        const BOX_INITIAL_POS = new THREE.Vector3(0, BOX_SIZE / 2, -1.5);  // J1=-90°の方向
+        const DROP_TARGET_POS = new THREE.Vector3(0, BOX_SIZE / 2, 1.5);   // J1=90°の方向
 
         // Target Box
         const boxGeo = new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE);
@@ -302,46 +312,130 @@
 
         // --- 5. KINEMATICS & AUTOMATION LOGIC ---
 
-        // 手動で調整した角度を使用（IKの代わりに確実な値）
-        // ロボット構造: shoulder高さ=2.2, L2=1.8, L3=0.7
-        // joint1: Y軸回転（-値で時計回り）, joint2/3: Z軸回転（+値で前傾）
+        /**
+         * Forward Kinematics: 関節角度からハンド位置を計算
+         * joint1.rotation.y = -θ1 なので:
+         * - θ1 > 0 → 時計回り（上から見て）→ +Z方向へ
+         * - θ1 < 0 → 反時計回り → -Z方向へ
+         */
+        function forwardKinematics(j1Deg, j2Deg, j3Deg) {
+            const j1 = j1Deg * Math.PI / 180;
+            const j2 = j2Deg * Math.PI / 180;
+            const j3 = j3Deg * Math.PI / 180;
 
-        // ピック位置（正面 x=2, z=0）用の角度
-        const PICK_ANGLES = {
-            approach: { j1: 0, j2: 50, j3: 30 },   // 上空アプローチ
-            grab: { j1: 0, j2: 70, j3: 50 },       // 掴む位置
-            lift: { j1: 0, j2: 40, j3: 20 }        // 持ち上げ
-        };
+            // 水平距離（shoulder からの）
+            const r = ROBOT.L2 * Math.sin(j2) + ROBOT.L3 * Math.sin(j2 + j3);
+            // 垂直位置
+            const y = ROBOT.SHOULDER_HEIGHT + ROBOT.L2 * Math.cos(j2) + ROBOT.L3 * Math.cos(j2 + j3);
 
-        // ドロップ位置（左横 x=0, z=2）用の角度
-        const DROP_ANGLES = {
-            approach: { j1: 90, j2: 50, j3: 30 },  // 上空アプローチ
-            place: { j1: 90, j2: 70, j3: 50 },     // 置く位置
-            lift: { j1: 90, j2: 40, j3: 20 }       // 持ち上げ
-        };
+            // J1の回転を適用: joint1.rotation.y = -j1
+            // 回転後の方向: (cos(j1), 0, sin(j1))
+            const x = r * Math.cos(j1);
+            const z = r * Math.sin(j1);
+
+            return { x, y, z };
+        }
+
+        /**
+         * Inverse Kinematics: 目標位置から関節角度を計算
+         */
+        function inverseKinematics(targetX, targetY, targetZ) {
+            // J1: ベース回転角度
+            // atan2(z, x) で X軸からの角度を計算
+            let j1 = Math.atan2(targetZ, targetX) * 180 / Math.PI;
+
+            // 水平距離
+            const r = Math.sqrt(targetX * targetX + targetZ * targetZ);
+
+            // Shoulder からの相対高さ
+            const dy = targetY - ROBOT.SHOULDER_HEIGHT;
+
+            // 目標までの距離
+            const dist = Math.sqrt(r * r + dy * dy);
+
+            // 到達可能性チェック
+            const maxReach = ROBOT.L2 + ROBOT.L3;
+            const minReach = Math.abs(ROBOT.L2 - ROBOT.L3);
+
+            let j2, j3;
+
+            if (dist > maxReach) {
+                // 届かない: 腕を伸ばして方向を向ける
+                console.warn('Target out of reach:', dist, '> max:', maxReach);
+                const angle = Math.atan2(r, -dy);
+                j2 = angle * 180 / Math.PI;
+                j3 = 0;
+            } else if (dist < minReach) {
+                // 近すぎる
+                console.warn('Target too close:', dist, '< min:', minReach);
+                j2 = 45;
+                j3 = 90;
+            } else {
+                // 余弦定理で角度を計算
+                // J3 (肘角度)
+                const cosJ3 = (ROBOT.L2 * ROBOT.L2 + ROBOT.L3 * ROBOT.L3 - dist * dist)
+                            / (2 * ROBOT.L2 * ROBOT.L3);
+                const j3Internal = Math.acos(Math.max(-1, Math.min(1, cosJ3)));
+                j3 = (Math.PI - j3Internal) * 180 / Math.PI;
+
+                // J2 (肩角度)
+                const cosAlpha = (ROBOT.L2 * ROBOT.L2 + dist * dist - ROBOT.L3 * ROBOT.L3)
+                               / (2 * ROBOT.L2 * dist);
+                const alpha = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
+                const beta = Math.atan2(r, -dy); // 水平方向から下向きの角度
+
+                j2 = (beta - alpha) * 180 / Math.PI; // elbow-up configuration
+            }
+
+            // 関節制限を適用
+            j1 = Math.max(-180, Math.min(180, j1));
+            j2 = Math.max(-45, Math.min(90, j2));
+            j3 = Math.max(-90, Math.min(90, j3));
+
+            return { j1, j2, j3 };
+        }
 
         let isAutomating = false;
         let automationStep = 0;
         let stepTimer = 0;
         let sequence = [];
 
-        // シーケンスを生成（手動調整された角度を使用）
+        // シーケンスを生成（IKで計算）
         function generateSequence() {
-            console.log('Generating sequence with manual angles');
-            console.log('Box initial pos:', BOX_INITIAL_POS);
-            console.log('Drop target pos:', DROP_TARGET_POS);
+            // 掴む高さ: ボックス上面 + マージン
+            const grabHeight = BOX_SIZE + 0.15;
+            // 持ち上げ高さ
+            const liftHeight = BOX_SIZE + 0.8;
+
+            // ピック位置のIK計算
+            const pickGrab = inverseKinematics(BOX_INITIAL_POS.x, grabHeight, BOX_INITIAL_POS.z);
+            const pickLift = inverseKinematics(BOX_INITIAL_POS.x, liftHeight, BOX_INITIAL_POS.z);
+            const pickApproach = { j1: pickGrab.j1, j2: pickLift.j2, j3: pickLift.j3 };
+
+            // ドロップ位置のIK計算
+            const dropPlace = inverseKinematics(DROP_TARGET_POS.x, grabHeight, DROP_TARGET_POS.z);
+            const dropLift = inverseKinematics(DROP_TARGET_POS.x, liftHeight, DROP_TARGET_POS.z);
+            const dropApproach = { j1: dropPlace.j1, j2: dropLift.j2, j3: dropLift.j3 };
+
+            console.log('=== IK Calculation Results ===');
+            console.log('Box pos:', BOX_INITIAL_POS);
+            console.log('Pick grab angles:', pickGrab);
+            console.log('Pick grab FK verify:', forwardKinematics(pickGrab.j1, pickGrab.j2, pickGrab.j3));
+            console.log('Drop pos:', DROP_TARGET_POS);
+            console.log('Drop place angles:', dropPlace);
+            console.log('Drop place FK verify:', forwardKinematics(dropPlace.j1, dropPlace.j2, dropPlace.j3));
 
             return [
-                { a: [0, 0, 0], w: 30, type: 'open' },                                           // ホーム
-                { a: [PICK_ANGLES.approach.j1, PICK_ANGLES.approach.j2, PICK_ANGLES.approach.j3], w: 25, type: 'move' },  // ピック上空
-                { a: [PICK_ANGLES.grab.j1, PICK_ANGLES.grab.j2, PICK_ANGLES.grab.j3], w: 35, type: 'move' },              // ピック位置へ
-                { a: [PICK_ANGLES.grab.j1, PICK_ANGLES.grab.j2, PICK_ANGLES.grab.j3], w: 40, type: 'grab' },              // 掴む
-                { a: [PICK_ANGLES.lift.j1, PICK_ANGLES.lift.j2, PICK_ANGLES.lift.j3], w: 30, type: 'move' },              // 持ち上げ
-                { a: [DROP_ANGLES.lift.j1, DROP_ANGLES.lift.j2, DROP_ANGLES.lift.j3], w: 40, type: 'move' },              // ドロップ上空へ回転
-                { a: [DROP_ANGLES.place.j1, DROP_ANGLES.place.j2, DROP_ANGLES.place.j3], w: 35, type: 'move' },           // ドロップ位置へ
-                { a: [DROP_ANGLES.place.j1, DROP_ANGLES.place.j2, DROP_ANGLES.place.j3], w: 40, type: 'drop' },           // 離す
-                { a: [DROP_ANGLES.approach.j1, DROP_ANGLES.approach.j2, DROP_ANGLES.approach.j3], w: 25, type: 'move' },  // 上昇
-                { a: [0, 0, 0], w: 0, type: 'finish' }                                           // ホームに戻る
+                { a: [0, 0, 0], w: 30, type: 'open' },
+                { a: [pickApproach.j1, pickApproach.j2, pickApproach.j3], w: 25, type: 'move' },
+                { a: [pickGrab.j1, pickGrab.j2, pickGrab.j3], w: 35, type: 'move' },
+                { a: [pickGrab.j1, pickGrab.j2, pickGrab.j3], w: 40, type: 'grab' },
+                { a: [pickLift.j1, pickLift.j2, pickLift.j3], w: 30, type: 'move' },
+                { a: [dropLift.j1, dropLift.j2, dropLift.j3], w: 40, type: 'move' },
+                { a: [dropPlace.j1, dropPlace.j2, dropPlace.j3], w: 35, type: 'move' },
+                { a: [dropPlace.j1, dropPlace.j2, dropPlace.j3], w: 40, type: 'drop' },
+                { a: [dropApproach.j1, dropApproach.j2, dropApproach.j3], w: 25, type: 'move' },
+                { a: [0, 0, 0], w: 0, type: 'finish' }
             ];
         }
 
@@ -399,12 +493,12 @@
             // ボックスをシーンに戻す
             scene.attach(targetBox);
 
-            // ドロップターゲットの台の上に正確に配置
-            targetBox.position.copy(DROP_TARGET_POS);
+            // ハンドの現在位置のXZ座標を使用し、Yは床に置く
+            targetBox.position.set(worldPos.x, BOX_SIZE / 2, worldPos.z);
             targetBox.rotation.set(0, 0, 0);
 
             isGrabbing = false;
-            console.log('Box dropped at drop target:', DROP_TARGET_POS);
+            console.log('Box dropped at:', targetBox.position);
         }
 
         function toggleAutomation() {
