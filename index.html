@@ -130,16 +130,8 @@
                 accent: 0xffaa00,
                 box: 0xff4444
             },
-            smoothness: 0.12, // 動きの遅れ係数 (少し速く)
-            autoSpeed: 2,     // 自動再生時の待機時間倍率
-            // ロボットアームのリンク長（実際の3Dモデルに合わせる）
-            robot: {
-                baseHeight: 0.4,      // ベースの高さ
-                link1Height: 1.8,     // Joint1からJoint2までの高さ
-                link2Length: 1.8,     // Link2の長さ（Joint2からJoint3）
-                link3Length: 0.7,     // Link3の長さ（Joint3からハンド）
-                gripperLength: 0.5    // グリッパーの長さ
-            }
+            smoothness: 0.1,  // 動きの遅れ係数
+            autoSpeed: 2      // 自動再生時の待機時間倍率
         };
 
         // --- 2. THREE.JS SETUP ---
@@ -265,9 +257,10 @@
         // --- 4. OBJECTS & TRAJECTORY ---
 
         // ボックスの設定 (ロボットの到達範囲内に配置)
-        const BOX_SIZE = 0.3;
-        const BOX_INITIAL_POS = new THREE.Vector3(1.5, BOX_SIZE / 2, 1.0);
-        const DROP_TARGET_POS = new THREE.Vector3(-1.2, BOX_SIZE / 2, 1.0);
+        // ロボットの腕: L2=1.8, L3=0.7, maxReach=2.5, shoulderHeight=2.2
+        const BOX_SIZE = 0.25;
+        const BOX_INITIAL_POS = new THREE.Vector3(1.0, BOX_SIZE / 2, 0.8);
+        const DROP_TARGET_POS = new THREE.Vector3(-0.8, BOX_SIZE / 2, 1.0);
 
         // Target Box
         const boxGeo = new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE);
@@ -310,97 +303,102 @@
 
         // --- 5. KINEMATICS & AUTOMATION LOGIC ---
 
+        // ロボットのリンク長定数
+        const L1 = 1.8;  // joint2.position.y (shoulder height from base top)
+        const L2 = 1.8;  // joint3.position.y (upper arm length)
+        const L3 = 0.7;  // handGroup.position.y (forearm + hand length)
+        const BASE_HEIGHT = 0.4; // joint1.position.y
+
         // 逆運動学 (IK) - 目標位置から各関節角度を計算
-        function calculateIK(targetPos, heightOffset = 0) {
-            const R = CONFIG.robot;
-            // ベースからの相対位置
-            const x = targetPos.x;
-            const z = targetPos.z;
-            const y = targetPos.y + heightOffset;
-
+        function calculateIK(targetX, targetY, targetZ) {
             // Joint1 (ベースの回転) - XZ平面での角度
-            const j1 = Math.atan2(x, z) * (180 / Math.PI);
+            const j1 = Math.atan2(targetX, targetZ) * (180 / Math.PI);
 
-            // 水平距離
-            const horizontalDist = Math.sqrt(x * x + z * z);
+            // 水平距離（ベースからターゲットまで）
+            const r = Math.sqrt(targetX * targetX + targetZ * targetZ);
 
-            // Joint2の高さ（ベースから）
-            const baseToJ2Height = R.baseHeight + R.link1Height; // 0.4 + 1.8 = 2.2
-            const L2 = R.link2Length;  // 1.8
-            const L3 = R.link3Length + R.gripperLength; // 0.7 + 0.5 = 1.2
+            // Joint2の高さ（ワールド座標）
+            const shoulderHeight = BASE_HEIGHT + L1; // 2.2
 
-            // ターゲットからJoint2への相対ベクトル
-            const relativeY = y - baseToJ2Height;
-            const reachDist = Math.sqrt(horizontalDist * horizontalDist + relativeY * relativeY);
+            // ターゲットまでの相対座標（shoulder基準）
+            const dx = r;  // 水平距離
+            const dy = targetY - shoulderHeight;  // 垂直距離（下向きが負）
+
+            // ターゲットまでの距離
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // アーム長
+            const arm1 = L2;  // 1.8
+            const arm2 = L3;  // 0.7
 
             let j2, j3;
 
-            // 腕が届く範囲をチェック
-            const maxReach = L2 + L3;
-            const minReach = Math.abs(L2 - L3);
+            // 到達範囲チェック
+            const maxReach = arm1 + arm2;
+            const minReach = Math.abs(arm1 - arm2);
 
-            if (reachDist >= maxReach) {
-                // 届かない - 腕を完全に伸ばす
-                const targetAngle = Math.atan2(relativeY, horizontalDist);
-                j2 = (Math.PI / 2 - targetAngle) * (180 / Math.PI);
+            if (dist > maxReach * 0.98) {
+                // 届かない場合 - 腕を伸ばして方向を向ける
+                const angle = Math.atan2(-dy, dx);
+                j2 = angle * (180 / Math.PI);
                 j3 = 0;
-            } else if (reachDist <= minReach) {
-                // 近すぎる - 肘を曲げる
-                j2 = 45;
-                j3 = 90;
+            } else if (dist < minReach * 1.02) {
+                // 近すぎる場合
+                j2 = 0;
+                j3 = 45;
             } else {
-                // 余弦定理で角度計算 (2リンクロボットアームのIK)
-                // 肘の角度 (j3)
-                const cosElbow = (L2 * L2 + L3 * L3 - reachDist * reachDist) / (2 * L2 * L3);
+                // 余弦定理でIK計算
+                // 肘角度（内角）
+                const cosElbow = (arm1 * arm1 + arm2 * arm2 - dist * dist) / (2 * arm1 * arm2);
                 const elbowAngle = Math.acos(Math.max(-1, Math.min(1, cosElbow)));
+
+                // j3は肘の曲げ角度（0=伸ばす、正=曲げる）
                 j3 = (Math.PI - elbowAngle) * (180 / Math.PI);
 
-                // 肩の角度 (j2)
-                const cosShoulder = (L2 * L2 + reachDist * reachDist - L3 * L3) / (2 * L2 * reachDist);
+                // 肩角度
+                const cosShoulder = (arm1 * arm1 + dist * dist - arm2 * arm2) / (2 * arm1 * dist);
                 const shoulderAngle = Math.acos(Math.max(-1, Math.min(1, cosShoulder)));
-                const targetAngle = Math.atan2(relativeY, horizontalDist);
 
-                // j2は垂直からの角度
-                j2 = (shoulderAngle - targetAngle) * (180 / Math.PI);
+                // ターゲット方向の角度
+                const targetAngle = Math.atan2(-dy, dx);
+
+                // j2は垂直から前方への角度
+                j2 = (targetAngle + shoulderAngle) * (180 / Math.PI);
             }
 
-            // 関節の制限を適用
+            // 関節制限を適用
             j2 = Math.max(-45, Math.min(90, j2));
             j3 = Math.max(-90, Math.min(90, j3));
 
             return { j1, j2, j3 };
         }
 
-        // 順運動学 (FK) - 現在の関節角度からエンドエフェクタ位置を計算
-        function calculateFK(j1Deg, j2Deg, j3Deg) {
-            const R = CONFIG.robot;
-            const j1 = j1Deg * (Math.PI / 180);
-            const j2 = j2Deg * (Math.PI / 180);
-            const j3 = j3Deg * (Math.PI / 180);
+        // ハンドのワールド位置を計算（Forward Kinematics）
+        function getHandWorldPosition(j1Deg, j2Deg, j3Deg) {
+            const j1 = j1Deg * Math.PI / 180;
+            const j2 = j2Deg * Math.PI / 180;
+            const j3 = j3Deg * Math.PI / 180;
 
-            const baseToJ2Height = R.baseHeight + R.link1Height;
-            const L2 = R.link2Length;
-            const L3 = R.link3Length + R.gripperLength;
+            const shoulderHeight = BASE_HEIGHT + L1;
 
-            // Link2の先端位置
-            const l2X = L2 * Math.sin(j2);
-            const l2Y = L2 * Math.cos(j2);
+            // Link2の先端（joint3の位置）
+            const link2Horizontal = L2 * Math.sin(j2);
+            const link2Vertical = L2 * Math.cos(j2);
 
-            // Link3の先端位置（Link2からの相対）
+            // Link3の先端（hand位置）- joint3からの相対
             const totalAngle = j2 + j3;
-            const l3X = L3 * Math.sin(totalAngle);
-            const l3Y = L3 * Math.cos(totalAngle);
+            const link3Horizontal = L3 * Math.sin(totalAngle);
+            const link3Vertical = L3 * Math.cos(totalAngle);
 
-            // 合計の水平・垂直距離
-            const horizontalDist = l2X + l3X;
-            const verticalDist = baseToJ2Height + l2Y + l3Y;
+            // 合計
+            const horizontalDist = link2Horizontal + link3Horizontal;
+            const y = shoulderHeight + link2Vertical + link3Vertical;
 
-            // XZ平面での座標
+            // XZ座標（j1の回転を適用）
             const x = horizontalDist * Math.sin(j1);
             const z = horizontalDist * Math.cos(j1);
-            const y = verticalDist;
 
-            return new THREE.Vector3(x, y, z);
+            return { x, y, z };
         }
 
         let isAutomating = false;
@@ -410,39 +408,40 @@
 
         // シーケンスを動的に生成
         function generateSequence() {
-            const pickPos = BOX_INITIAL_POS.clone();
-            pickPos.y = BOX_SIZE + 0.1; // ボックスの上面 + マージン
+            // ボックスの掴み位置（ボックス上面の少し上）
+            const grabHeight = BOX_SIZE + 0.15;
 
-            const approachPick = pickPos.clone();
-            approachPick.y += 0.5; // 上からアプローチ
+            // ピック位置のIK計算
+            const pickIK = calculateIK(BOX_INITIAL_POS.x, grabHeight, BOX_INITIAL_POS.z);
 
-            const dropPos = DROP_TARGET_POS.clone();
-            dropPos.y = BOX_SIZE + 0.1;
+            // ドロップ位置のIK計算
+            const dropIK = calculateIK(DROP_TARGET_POS.x, grabHeight, DROP_TARGET_POS.z);
 
-            const approachDrop = dropPos.clone();
-            approachDrop.y += 0.5;
+            // アプローチ位置（少し高め）
+            const approachHeight = grabHeight + 0.6;
+            const approachPickIK = calculateIK(BOX_INITIAL_POS.x, approachHeight, BOX_INITIAL_POS.z);
+            const approachDropIK = calculateIK(DROP_TARGET_POS.x, approachHeight, DROP_TARGET_POS.z);
 
-            const liftPos = pickPos.clone();
-            liftPos.y += 0.8;
+            // リフト位置
+            const liftHeight = grabHeight + 0.8;
+            const liftPickIK = calculateIK(BOX_INITIAL_POS.x, liftHeight, BOX_INITIAL_POS.z);
+            const liftDropIK = calculateIK(DROP_TARGET_POS.x, liftHeight, DROP_TARGET_POS.z);
 
-            const homeAngles = { j1: 0, j2: 0, j3: 0 };
-            const approachPickAngles = calculateIK(approachPick);
-            const pickAngles = calculateIK(pickPos);
-            const liftAngles = calculateIK(liftPos);
-            const approachDropAngles = calculateIK(approachDrop);
-            const dropAngles = calculateIK(dropPos);
+            console.log('Pick IK:', pickIK);
+            console.log('Drop IK:', dropIK);
+            console.log('Hand pos at pick:', getHandWorldPosition(pickIK.j1, pickIK.j2, pickIK.j3));
 
             return [
-                { a: [homeAngles.j1, homeAngles.j2, homeAngles.j3], w: 30, type: 'open' },
-                { a: [approachPickAngles.j1, approachPickAngles.j2, approachPickAngles.j3], w: 20, type: 'move' },
-                { a: [pickAngles.j1, pickAngles.j2, pickAngles.j3], w: 30, type: 'move' },
-                { a: [pickAngles.j1, pickAngles.j2, pickAngles.j3], w: 40, type: 'grab' },
-                { a: [liftAngles.j1, liftAngles.j2, liftAngles.j3], w: 30, type: 'move' },
-                { a: [approachDropAngles.j1, approachDropAngles.j2, approachDropAngles.j3], w: 30, type: 'move' },
-                { a: [dropAngles.j1, dropAngles.j2, dropAngles.j3], w: 30, type: 'move' },
-                { a: [dropAngles.j1, dropAngles.j2, dropAngles.j3], w: 40, type: 'drop' },
-                { a: [approachDropAngles.j1, approachDropAngles.j2, approachDropAngles.j3], w: 20, type: 'move' },
-                { a: [homeAngles.j1, homeAngles.j2, homeAngles.j3], w: 0, type: 'finish' }
+                { a: [0, 0, 0], w: 20, type: 'open' },                              // ホーム＋グリッパーオープン
+                { a: [approachPickIK.j1, approachPickIK.j2, approachPickIK.j3], w: 15, type: 'move' },  // ピック上空へ
+                { a: [pickIK.j1, pickIK.j2, pickIK.j3], w: 25, type: 'move' },      // ピック位置へ下降
+                { a: [pickIK.j1, pickIK.j2, pickIK.j3], w: 35, type: 'grab' },      // 掴む
+                { a: [liftPickIK.j1, liftPickIK.j2, liftPickIK.j3], w: 20, type: 'move' },  // 持ち上げ
+                { a: [liftDropIK.j1, liftDropIK.j2, liftDropIK.j3], w: 25, type: 'move' },  // ドロップ上空へ移動
+                { a: [dropIK.j1, dropIK.j2, dropIK.j3], w: 20, type: 'move' },      // ドロップ位置へ下降
+                { a: [dropIK.j1, dropIK.j2, dropIK.j3], w: 35, type: 'drop' },      // 離す
+                { a: [approachDropIK.j1, approachDropIK.j2, approachDropIK.j3], w: 15, type: 'move' },  // 上昇
+                { a: [0, 0, 0], w: 0, type: 'finish' }                              // ホームに戻る
             ];
         }
 
@@ -466,16 +465,34 @@
         function grabBox() {
             if (isGrabbing) return;
 
+            // グリッパーを閉じる
             closeGripper();
-            isGrabbing = true;
 
-            // ボックスをハンドにアタッチ (ワールド座標を保持)
-            handGroup.attach(targetBox);
+            // ハンドのワールド位置を取得
+            const handWorldPos = new THREE.Vector3();
+            handGroup.getWorldPosition(handWorldPos);
 
-            // ボックスをグリッパーの指の間に正確に配置
-            // 指の長さ (0.35) の中央付近にボックスを配置
-            targetBox.position.set(0, 0.15 + BOX_SIZE / 2, 0);
-            targetBox.rotation.set(0, 0, 0);
+            // ボックスとハンドの距離をチェック
+            const boxPos = targetBox.position.clone();
+            const distance = handWorldPos.distanceTo(boxPos);
+
+            console.log('Grab - Hand pos:', handWorldPos, 'Box pos:', boxPos, 'Distance:', distance);
+
+            // 距離が近ければ掴む（1.5以内なら掴む）
+            if (distance < 1.5) {
+                isGrabbing = true;
+
+                // ボックスをハンドの子にする
+                handGroup.attach(targetBox);
+
+                // ボックスをグリッパー中心に配置（指の間）
+                targetBox.position.set(0, 0.2, 0);
+                targetBox.rotation.set(0, 0, 0);
+
+                console.log('Box grabbed successfully!');
+            } else {
+                console.log('Box too far to grab');
+            }
         }
 
         function dropBox() {
@@ -486,21 +503,26 @@
                 return;
             }
 
+            // グリッパーを開く
             openGripper();
 
-            // ボックスのワールド位置を取得してからシーンに戻す
+            // ボックスのワールド位置を取得
             const worldPos = new THREE.Vector3();
             targetBox.getWorldPosition(worldPos);
 
+            console.log('Drop - World pos:', worldPos);
+
+            // ボックスをシーンに戻す
             scene.attach(targetBox);
 
-            // 床の高さに正確に配置
+            // 床に落とす（XZ位置は維持、Yは床の高さ）
             targetBox.position.x = worldPos.x;
             targetBox.position.y = BOX_SIZE / 2;
             targetBox.position.z = worldPos.z;
             targetBox.rotation.set(0, 0, 0);
 
             isGrabbing = false;
+            console.log('Box dropped at:', targetBox.position);
         }
 
         function toggleAutomation() {
