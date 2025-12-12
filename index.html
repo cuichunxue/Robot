@@ -266,10 +266,10 @@
         };
 
         // ボックスの設定
-        // J1=-90°で-Z方向、J1=90°で+Z方向
+        // J1=90°で+Z方向（ボックス）、J1=-90°で-Z方向（台）
         const BOX_SIZE = 0.25;
-        const BOX_INITIAL_POS = new THREE.Vector3(0, BOX_SIZE / 2, -1.5);  // J1=-90°の方向
-        const DROP_TARGET_POS = new THREE.Vector3(0, BOX_SIZE / 2, 1.5);   // J1=90°の方向
+        const BOX_INITIAL_POS = new THREE.Vector3(0, BOX_SIZE / 2, 1.5);   // J1=90°の方向
+        const DROP_TARGET_POS = new THREE.Vector3(0, BOX_SIZE / 2, -1.5);  // J1=-90°の方向
 
         // Target Box
         const boxGeo = new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE);
