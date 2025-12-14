@@ -210,16 +210,16 @@
     };
 
     // 台座設定
-    // J1=90° → +Z方向 → 台（ドロップターゲット）
-    // J1=-90° → -Z方向 → もの（ボックス）
+    // J1=90° → +Z方向 → もの（ボックス）
+    // J1=-90° → -Z方向 → 台（ドロップターゲット）
     const PEDESTAL_HEIGHT = 1.0;
     const PEDESTAL_RADIUS = 0.4;
-    const REACH_DISTANCE = 2.0;
+    const REACH_DISTANCE = 1.8;  // ロボットが届く距離に調整
     const BOX_SIZE = 0.25;
-    // ボックスは-Z方向（J1=-90°）に配置
-    const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, -REACH_DISTANCE);
-    // 台は+Z方向（J1=90°）に配置
-    const DROP_TARGET_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
+    // ボックスは+Z方向（J1=90°）に配置
+    const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
+    // 台は-Z方向（J1=-90°）に配置
+    const DROP_TARGET_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, -REACH_DISTANCE);
 
     // ========================================
     // 2. STATE VARIABLES
@@ -400,12 +400,12 @@
     // ========================================
     // 5. OBJECTS (Pedestals, Box)
     // ========================================
-    // Pickup Pedestal (緑) - ボックスの初期位置 - J1=-90° (-Z方向)
+    // Pickup Pedestal (緑) - ボックスの初期位置 - J1=90° (+Z方向)
     const pickupPedestal = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
         new THREE.MeshPhongMaterial({ color: 0x228844 })
     );
-    pickupPedestal.position.set(0, PEDESTAL_HEIGHT / 2, -REACH_DISTANCE);
+    pickupPedestal.position.set(0, PEDESTAL_HEIGHT / 2, REACH_DISTANCE);
     pickupPedestal.castShadow = true;
     pickupPedestal.receiveShadow = true;
     scene.add(pickupPedestal);
@@ -414,15 +414,15 @@
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
         new THREE.MeshPhongMaterial({ color: 0x44cc66, transparent: true, opacity: 0.8 })
     );
-    pickupPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, -REACH_DISTANCE);
+    pickupPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, REACH_DISTANCE);
     scene.add(pickupPlatform);
 
-    // Drop Pedestal (オレンジ) - ドロップターゲット - J1=90° (+Z方向)
+    // Drop Pedestal (オレンジ) - ドロップターゲット - J1=-90° (-Z方向)
     const dropPedestal = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
         new THREE.MeshPhongMaterial({ color: 0xcc6600 })
     );
-    dropPedestal.position.set(0, PEDESTAL_HEIGHT / 2, REACH_DISTANCE);
+    dropPedestal.position.set(0, PEDESTAL_HEIGHT / 2, -REACH_DISTANCE);
     dropPedestal.castShadow = true;
     dropPedestal.receiveShadow = true;
     scene.add(dropPedestal);
@@ -431,7 +431,7 @@
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
         new THREE.MeshPhongMaterial({ color: 0xffaa44, transparent: true, opacity: 0.8 })
     );
-    dropPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, REACH_DISTANCE);
+    dropPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, -REACH_DISTANCE);
     scene.add(dropPlatform);
 
     // Target Box
@@ -668,23 +668,23 @@
 
     /**
      * 完全な軌道を構築
-     * ボックス: -Z方向 (J1=-90°)
-     * 台: +Z方向 (J1=90°)
+     * ボックス: +Z方向 (J1=90°)
+     * 台: -Z方向 (J1=-90°)
      */
     function buildJointTrajectory() {
         const grabHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.1;
         const liftHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.6;
         const approachHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.8;
 
-        // ボックスは-Z方向（J1=-90°）、台は+Z方向（J1=90°）
+        // ボックスは+Z方向（J1=90°）、台は-Z方向（J1=-90°）
         const waypoints = [
-            { pos: { x: 0, y: approachHeight, z: -REACH_DISTANCE }, action: 'APPROACH_PICK' },
-            { pos: { x: 0, y: grabHeight, z: -REACH_DISTANCE }, action: 'GRAB' },
-            { pos: { x: 0, y: liftHeight, z: -REACH_DISTANCE }, action: 'LIFT' },
+            { pos: { x: 0, y: approachHeight, z: REACH_DISTANCE }, action: 'APPROACH_PICK' },
+            { pos: { x: 0, y: grabHeight, z: REACH_DISTANCE }, action: 'GRAB' },
+            { pos: { x: 0, y: liftHeight, z: REACH_DISTANCE }, action: 'LIFT' },
             { pos: { x: 0, y: liftHeight, z: 0 }, action: 'TRANSIT' },
-            { pos: { x: 0, y: liftHeight, z: REACH_DISTANCE }, action: 'APPROACH_DROP' },
-            { pos: { x: 0, y: grabHeight, z: REACH_DISTANCE }, action: 'PLACE' },
-            { pos: { x: 0, y: approachHeight, z: REACH_DISTANCE }, action: 'RETREAT' },
+            { pos: { x: 0, y: liftHeight, z: -REACH_DISTANCE }, action: 'APPROACH_DROP' },
+            { pos: { x: 0, y: grabHeight, z: -REACH_DISTANCE }, action: 'PLACE' },
+            { pos: { x: 0, y: approachHeight, z: -REACH_DISTANCE }, action: 'RETREAT' },
             { pos: { x: 0, y: ROBOT.SHOULDER_HEIGHT + 1, z: 0 }, action: 'HOME' }
         ];
 
@@ -778,9 +778,9 @@
         }
 
         // 台座外でのクリアランス
-        // Pickup (ボックス) は -Z方向、Drop (台) は +Z方向
-        const nearPickup = Math.sqrt(pos.x * pos.x + (pos.z + REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
-        const nearDrop = Math.sqrt(pos.x * pos.x + (pos.z - REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        // Pickup (ボックス) は +Z方向、Drop (台) は -Z方向
+        const nearPickup = Math.sqrt(pos.x * pos.x + (pos.z - REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        const nearDrop = Math.sqrt(pos.x * pos.x + (pos.z + REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
 
         if (!nearPickup && !nearDrop && pos.y < CONFIG.constraints.clearanceHeight) {
             pos.y = CONFIG.constraints.clearanceHeight;
@@ -830,7 +830,7 @@
 
     /**
      * 配置チェック
-     * 台は+Z方向（J1=90°）にある
+     * 台は-Z方向（J1=-90°）にある
      */
     function checkPlace() {
         if (!gripState.isGrabbing) return false;
@@ -838,8 +838,8 @@
         const tcpPos = new THREE.Vector3();
         handGroup.getWorldPosition(tcpPos);
 
-        // 台は+Z方向（REACH_DISTANCE）にある
-        const targetDist = Math.sqrt(tcpPos.x ** 2 + (tcpPos.z - REACH_DISTANCE) ** 2);
+        // 台は-Z方向（-REACH_DISTANCE）にある
+        const targetDist = Math.sqrt(tcpPos.x ** 2 + (tcpPos.z + REACH_DISTANCE) ** 2);
 
         if (targetDist < PEDESTAL_RADIUS + 0.2 && tcpPos.y < PEDESTAL_HEIGHT + BOX_SIZE + 0.3) {
             // 配置成功
@@ -847,8 +847,8 @@
             targetBox.getWorldPosition(worldPos);
 
             scene.attach(targetBox);
-            // 台は+Z方向
-            targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
+            // 台は-Z方向
+            targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, -REACH_DISTANCE);
             targetBox.rotation.set(0, 0, 0);
 
             gripState.isGrabbing = false;
