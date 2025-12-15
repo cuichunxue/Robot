@@ -857,8 +857,9 @@
             return false;
         }
 
-        // ドロップ先のZ座標（軌道と一致させる）
-        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;
+        // ドロップ先のZ座標（軌道と一致させる - 視覚的に正しい位置）
+        // cycleDirection=true: 緑→オレンジ なのでオレンジ(視覚的に-Z)に置く
+        const dropZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;
 
         // ボックスをシーンに戻して配置
         scene.attach(targetBox);
