@@ -117,7 +117,8 @@
     <div id="analysis-panel" class="panel">
         <h3>Event Log</h3>
         <div class="event-log" id="eventLog"></div>
-        <div class="metric" style="margin-top:8px"><span class="metric-label">Replan Count:</span><span class="metric-value" id="replanCount">0</span></div>
+        <div class="metric" style="margin-top:8px"><span class="metric-label">Cycle Count:</span><span class="metric-value" id="cycleCountDisplay">0</span></div>
+        <div class="metric"><span class="metric-label">Replan Count:</span><span class="metric-value" id="replanCount">0</span></div>
         <div class="metric"><span class="metric-label">Frame Count:</span><span class="metric-value" id="frameCount">0</span></div>
         <div class="metric"><span class="metric-label">Sim Time:</span><span class="metric-value" id="simTime">0.00s</span></div>
     </div>
@@ -210,16 +211,14 @@
     };
 
     // 台座設定
-    // J1=-90°, J2=90°, J3=90° → (0, 1.5, -1.8) → もの（ボックス）
-    // J1=90°, J2=90°, J3=90° → (0, 1.5, +1.8) → オレンジ台（ドロップターゲット）
+    // 緑台: J1=90°, J2=90°, J3=90° → (0, 1.5, +1.8)
+    // オレンジ台: J1=-90°, J2=90°, J3=90° → (0, 1.5, -1.8)
     const PEDESTAL_HEIGHT = 1.5;   // TCP高さに合わせる
     const PEDESTAL_RADIUS = 0.4;
     const REACH_DISTANCE = 1.8;    // J2=90°, J3=90°での到達距離
     const BOX_SIZE = 0.25;
-    // ボックスは-Z方向（J1=-90°）に配置
-    const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, -REACH_DISTANCE);
-    // オレンジ台は+Z方向（J1=90°）に配置
-    const DROP_TARGET_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
+    // ボックスは緑台（+Z方向、J1=90°）に初期配置
+    const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
 
     // ========================================
     // 2. STATE VARIABLES
@@ -268,6 +267,9 @@
     let trajectoryIndex = 0;
     let replanCount = 0;
     let errorFrameCount = 0;
+    // サイクル方向: true = 緑→オレンジ, false = オレンジ→緑
+    let cycleDirection = true;
+    let cycleCount = 0;
 
     // ログ
     const frameLogs = [];
@@ -400,39 +402,39 @@
     // ========================================
     // 5. OBJECTS (Pedestals, Box)
     // ========================================
-    // Pickup Pedestal (緑) - ボックスの初期位置 - J1=-90° (-Z方向)
-    const pickupPedestal = new THREE.Mesh(
+    // 緑台 - J1=90° (+Z方向)
+    const greenPedestal = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
         new THREE.MeshPhongMaterial({ color: 0x228844 })
     );
-    pickupPedestal.position.set(0, PEDESTAL_HEIGHT / 2, -REACH_DISTANCE);
-    pickupPedestal.castShadow = true;
-    pickupPedestal.receiveShadow = true;
-    scene.add(pickupPedestal);
+    greenPedestal.position.set(0, PEDESTAL_HEIGHT / 2, REACH_DISTANCE);
+    greenPedestal.castShadow = true;
+    greenPedestal.receiveShadow = true;
+    scene.add(greenPedestal);
 
-    const pickupPlatform = new THREE.Mesh(
+    const greenPlatform = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
         new THREE.MeshPhongMaterial({ color: 0x44cc66, transparent: true, opacity: 0.8 })
     );
-    pickupPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, -REACH_DISTANCE);
-    scene.add(pickupPlatform);
+    greenPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, REACH_DISTANCE);
+    scene.add(greenPlatform);
 
-    // Drop Pedestal (オレンジ) - ドロップターゲット - J1=90° (+Z方向)
-    const dropPedestal = new THREE.Mesh(
+    // オレンジ台 - J1=-90° (-Z方向)
+    const orangePedestal = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
         new THREE.MeshPhongMaterial({ color: 0xcc6600 })
     );
-    dropPedestal.position.set(0, PEDESTAL_HEIGHT / 2, REACH_DISTANCE);
-    dropPedestal.castShadow = true;
-    dropPedestal.receiveShadow = true;
-    scene.add(dropPedestal);
+    orangePedestal.position.set(0, PEDESTAL_HEIGHT / 2, -REACH_DISTANCE);
+    orangePedestal.castShadow = true;
+    orangePedestal.receiveShadow = true;
+    scene.add(orangePedestal);
 
-    const dropPlatform = new THREE.Mesh(
+    const orangePlatform = new THREE.Mesh(
         new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
         new THREE.MeshPhongMaterial({ color: 0xffaa44, transparent: true, opacity: 0.8 })
     );
-    dropPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, REACH_DISTANCE);
-    scene.add(dropPlatform);
+    orangePlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, -REACH_DISTANCE);
+    scene.add(orangePlatform);
 
     // Target Box
     const targetBox = new THREE.Mesh(
@@ -673,25 +675,29 @@
     }
 
     /**
-     * 完全な軌道を構築
-     * ボックス: -Z方向 (J1=-90°, J2=90°, J3=90°)
-     * オレンジ台: +Z方向 (J1=90°, J2=90°, J3=90°)
+     * 完全な軌道を構築（サイクル対応）
+     * 緑台: +Z方向 (J1=90°)
+     * オレンジ台: -Z方向 (J1=-90°)
+     * cycleDirection: true = 緑→オレンジ, false = オレンジ→緑
      */
     function buildJointTrajectory() {
         const grabHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.1;
         const liftHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.6;
         const approachHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.8;
 
-        // ボックスは-Z方向（J1=-90°）、オレンジ台は+Z方向（J1=90°）
+        // ピックアップとドロップの位置を決定
+        const pickZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;   // 緑(+Z) or オレンジ(-Z)
+        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;   // オレンジ(-Z) or 緑(+Z)
+
         const waypoints = [
-            { pos: { x: 0, y: approachHeight, z: -REACH_DISTANCE }, action: 'APPROACH_PICK' },
-            { pos: { x: 0, y: grabHeight, z: -REACH_DISTANCE }, action: 'GRAB' },
-            { pos: { x: 0, y: liftHeight, z: -REACH_DISTANCE }, action: 'LIFT' },
+            { pos: { x: 0, y: approachHeight, z: pickZ }, action: 'APPROACH_PICK' },
+            { pos: { x: 0, y: grabHeight, z: pickZ }, action: 'GRAB' },
+            { pos: { x: 0, y: liftHeight, z: pickZ }, action: 'LIFT' },
             { pos: { x: 0, y: liftHeight, z: 0 }, action: 'TRANSIT' },
-            { pos: { x: 0, y: liftHeight, z: REACH_DISTANCE }, action: 'APPROACH_DROP' },
-            { pos: { x: 0, y: grabHeight, z: REACH_DISTANCE }, action: 'PLACE' },
-            { pos: { x: 0, y: approachHeight, z: REACH_DISTANCE }, action: 'RETREAT' },
-            { pos: { x: 0, y: ROBOT.SHOULDER_HEIGHT + 1, z: 0 }, action: 'HOME' }
+            { pos: { x: 0, y: liftHeight, z: dropZ }, action: 'APPROACH_DROP' },
+            { pos: { x: 0, y: grabHeight, z: dropZ }, action: 'PLACE' },
+            { pos: { x: 0, y: approachHeight, z: dropZ }, action: 'RETREAT' },
+            { pos: { x: 0, y: ROBOT.SHOULDER_HEIGHT + 1, z: 0 }, action: 'CYCLE_NEXT' }
         ];
 
         return planTaskSpacePath(waypoints);
@@ -784,9 +790,11 @@
         }
 
         // 台座外でのクリアランス
-        // Pickup (ボックス) は -Z方向、Drop (オレンジ台) は +Z方向
-        const nearPickup = Math.sqrt(pos.x * pos.x + (pos.z + REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
-        const nearDrop = Math.sqrt(pos.x * pos.x + (pos.z - REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        // 緑台: +Z方向、オレンジ台: -Z方向
+        const nearGreen = Math.sqrt(pos.x * pos.x + (pos.z - REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        const nearOrange = Math.sqrt(pos.x * pos.x + (pos.z + REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        const nearPickup = nearGreen;
+        const nearDrop = nearOrange;
 
         if (!nearPickup && !nearDrop && pos.y < CONFIG.constraints.clearanceHeight) {
             pos.y = CONFIG.constraints.clearanceHeight;
@@ -835,8 +843,9 @@
     }
 
     /**
-     * 配置チェック
-     * オレンジ台は+Z方向（J1=90°）にある
+     * 配置チェック（サイクル対応）
+     * cycleDirection: true → オレンジ台(-Z)に配置
+     * cycleDirection: false → 緑台(+Z)に配置
      */
     function checkPlace() {
         if (!gripState.isGrabbing) return false;
@@ -844,8 +853,9 @@
         const tcpPos = new THREE.Vector3();
         handGroup.getWorldPosition(tcpPos);
 
-        // オレンジ台は+Z方向（+REACH_DISTANCE）にある
-        const targetDist = Math.sqrt(tcpPos.x ** 2 + (tcpPos.z - REACH_DISTANCE) ** 2);
+        // ドロップ先のZ座標
+        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;
+        const targetDist = Math.sqrt(tcpPos.x ** 2 + (tcpPos.z - dropZ) ** 2);
 
         if (targetDist < PEDESTAL_RADIUS + 0.2 && tcpPos.y < PEDESTAL_HEIGHT + BOX_SIZE + 0.3) {
             // 配置成功
@@ -853,14 +863,13 @@
             targetBox.getWorldPosition(worldPos);
 
             scene.attach(targetBox);
-            // オレンジ台は+Z方向
-            targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
+            targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, dropZ);
             targetBox.rotation.set(0, 0, 0);
 
             gripState.isGrabbing = false;
             gripState.gripForce = 0;
 
-            logEvent('PLACE_OK', { position: targetBox.position.clone() });
+            logEvent('PLACE_OK', { position: targetBox.position.clone(), cycle: cycleCount });
             return true;
         }
 
@@ -1226,6 +1235,8 @@
         gripState.slipCum = 0;
         replanCount = 0;
         errorFrameCount = 0;
+        cycleDirection = true;  // 緑(+Z)→オレンジ(-Z)から開始
+        cycleCount = 0;
 
         // 軌道生成
         trajectory = buildJointTrajectory();
@@ -1233,7 +1244,7 @@
         isAutomating = true;
         automationPhase = 'RUNNING';
 
-        logEvent('AUTO_START', { trajectoryLength: trajectory.length });
+        logEvent('AUTO_START', { trajectoryLength: trajectory.length, startDirection: 'GREEN_TO_ORANGE' });
         updateStatus(true);
     }
 
@@ -1271,6 +1282,8 @@
         simTime = 0;
         frameCount = 0;
         replanCount = 0;
+        cycleDirection = true;  // 緑→オレンジから開始
+        cycleCount = 0;
 
         frameLogs.length = 0;
         eventLogs.length = 0;
@@ -1381,12 +1394,21 @@
                     checkGrab();
                 } else if (point.action === 'PLACE') {
                     checkPlace();
+                } else if (point.action === 'CYCLE_NEXT') {
+                    // 方向を反転して次のサイクルを開始
+                    cycleDirection = !cycleDirection;
+                    cycleCount++;
+                    logEvent('CYCLE_NEXT', { direction: cycleDirection ? 'GREEN_TO_ORANGE' : 'ORANGE_TO_GREEN', count: cycleCount });
+                    trajectory = buildJointTrajectory();
+                    trajectoryIndex = 0;
+                    return; // 新しい軌道を開始
                 }
             }
 
             trajectoryIndex++;
 
             if (trajectoryIndex >= trajectory.length) {
+                // サイクル終了（CYCLE_NEXTで継続するので通常ここには来ない）
                 stopAutomation();
             }
         } else if (!isAutomating) {
@@ -1445,6 +1467,7 @@
         ui.fkError.className = 'metric-value' + (errors.fk > CONFIG.thresholds.fkError ? ' error' : '');
         ui.trackError.className = 'metric-value' + (errors.track > CONFIG.thresholds.trackError ? ' warn' : '');
 
+        document.getElementById('cycleCountDisplay').textContent = cycleCount;
         ui.replanCount.textContent = replanCount;
         ui.frameCount.textContent = frameCount;
         ui.simTime.textContent = simTime.toFixed(2) + 's';
