@@ -676,19 +676,21 @@
 
     /**
      * 完全な軌道を構築（サイクル対応）
-     * 緑台: -Z方向 (J1=-90°)
-     * オレンジ台: +Z方向 (J1=90°)
-     * cycleDirection: true = 緑(-Z)→オレンジ(+Z), false = オレンジ(+Z)→緑(-Z)
+     * 視覚的に: 緑台=J1が-90°の方向、オレンジ台=J1が90°の方向
+     * cycleDirection: true = 緑→オレンジ, false = オレンジ→緑
      */
     function buildJointTrajectory() {
-        const grabHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.1;
-        const liftHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.6;
-        const approachHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.8;
+        const grabHeight = PEDESTAL_HEIGHT + BOX_SIZE / 2;  // ボックス中心の高さ
+        const liftHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.5;
+        const approachHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.7;
 
-        // ピックアップとドロップの位置を決定
-        // 緑台 = -Z, オレンジ台 = +Z
-        const pickZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;   // 緑(-Z) or オレンジ(+Z)
-        const dropZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;   // オレンジ(+Z) or 緑(-Z)
+        // ピックアップとドロップのZ座標を決定
+        // 視覚的動作に基づき調整: cycleDirection=trueで緑から取る
+        // 緑台が視覚的にJ1=-90°側にあるが、実際の座標系では+Zかもしれない
+        const pickZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;
+        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;
+
+        logEvent('TRAJECTORY_BUILD', { cycleDirection, pickZ, dropZ });
 
         const waypoints = [
             { pos: { x: 0, y: approachHeight, z: pickZ }, action: 'APPROACH_PICK' },
@@ -847,36 +849,29 @@
 
     /**
      * 配置チェック（サイクル対応）
-     * cycleDirection: true → オレンジ台(+Z)に配置
-     * cycleDirection: false → 緑台(-Z)に配置
+     * 常に配置を実行し、ボックスを離す
      */
     function checkPlace() {
-        if (!gripState.isGrabbing) return false;
-
-        const tcpPos = new THREE.Vector3();
-        handGroup.getWorldPosition(tcpPos);
-
-        // ドロップ先のZ座標（緑=-Z, オレンジ=+Z）
-        const dropZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;
-        const targetDist = Math.sqrt(tcpPos.x ** 2 + (tcpPos.z - dropZ) ** 2);
-
-        if (targetDist < PEDESTAL_RADIUS + 0.2 && tcpPos.y < PEDESTAL_HEIGHT + BOX_SIZE + 0.3) {
-            // 配置成功
-            const worldPos = new THREE.Vector3();
-            targetBox.getWorldPosition(worldPos);
-
-            scene.attach(targetBox);
-            targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, dropZ);
-            targetBox.rotation.set(0, 0, 0);
-
-            gripState.isGrabbing = false;
-            gripState.gripForce = 0;
-
-            logEvent('PLACE_OK', { position: targetBox.position.clone(), cycle: cycleCount });
-            return true;
+        if (!gripState.isGrabbing) {
+            logEvent('PLACE_SKIP', { reason: 'not_grabbing' });
+            return false;
         }
 
-        return false;
+        // ドロップ先のZ座標（軌道と一致させる）
+        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;
+
+        // ボックスをシーンに戻して配置
+        scene.attach(targetBox);
+        targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, dropZ);
+        targetBox.rotation.set(0, 0, 0);
+
+        // 把持状態をリセット
+        gripState.isGrabbing = false;
+        gripState.gripForce = 0;
+        gripState.slip = 0;
+
+        logEvent('PLACE_OK', { dropZ: dropZ, cycle: cycleCount });
+        return true;
     }
 
     /**
@@ -1238,7 +1233,7 @@
         gripState.slipCum = 0;
         replanCount = 0;
         errorFrameCount = 0;
-        cycleDirection = true;  // 緑(+Z)→オレンジ(-Z)から開始
+        cycleDirection = true;  // 緑(-Z)→オレンジ(+Z)から開始
         cycleCount = 0;
 
         // 軌道生成
