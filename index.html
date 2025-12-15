@@ -73,9 +73,9 @@
         <label>Base (J1) <span id="val1" class="value-display">0°</span></label>
         <input type="range" id="in1" min="-180" max="180" value="0">
         <label>Shoulder (J2) <span id="val2" class="value-display">0°</span></label>
-        <input type="range" id="in2" min="-45" max="90" value="0">
+        <input type="range" id="in2" min="-45" max="135" value="0">
         <label>Elbow (J3) <span id="val3" class="value-display">0°</span></label>
-        <input type="range" id="in3" min="-90" max="90" value="0">
+        <input type="range" id="in3" min="-90" max="135" value="0">
 
         <label style="margin-top: 15px; border-top: 1px solid #334455; padding-top: 10px;">TCP Position (Measured)</label>
         <div class="xyz-container">
@@ -204,17 +204,17 @@
         TCP_OFFSET: 0.15,      // TCPオフセット [m]
         JOINT_LIMITS: {
             j1: [-180, 180],
-            j2: [-45, 90],
-            j3: [-90, 90]
+            j2: [-45, 135],    // 下方向にも届くように拡張
+            j3: [-90, 135]     // 肘の曲げ範囲を拡張
         }
     };
 
     // 台座設定
     // J1=90° → +Z方向 → もの（ボックス）
     // J1=-90° → -Z方向 → 台（ドロップターゲット）
-    const PEDESTAL_HEIGHT = 1.0;
+    const PEDESTAL_HEIGHT = 1.5;   // 肩の高さに近づけて届きやすく
     const PEDESTAL_RADIUS = 0.4;
-    const REACH_DISTANCE = 1.8;  // ロボットが届く距離に調整
+    const REACH_DISTANCE = 1.5;    // 確実に届く距離
     const BOX_SIZE = 0.25;
     // ボックスは+Z方向（J1=90°）に配置
     const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, REACH_DISTANCE);
@@ -480,6 +480,7 @@
 
     /**
      * Inverse Kinematics: TCP位置 → 関節角度
+     * 修正版: 正しいelbow-down configurationを使用
      * @param {number} tx - 目標X [m]
      * @param {number} ty - 目標Y [m]
      * @param {number} tz - 目標Z [m]
@@ -513,15 +514,20 @@
             j3 = 90;
             reachable = false;
         } else {
-            // 余弦定理で計算
+            // 余弦定理でJ3を計算
             const cosJ3Internal = (ROBOT.L2 * ROBOT.L2 + ROBOT.L3 * ROBOT.L3 - D * D) / (2 * ROBOT.L2 * ROBOT.L3);
             const j3Internal = Math.acos(Math.max(-1, Math.min(1, cosJ3Internal)));
             j3 = (Math.PI - j3Internal) * 180 / Math.PI;
 
+            // J2を計算（修正版: elbow-down configuration）
+            // alpha: L2とターゲット方向の間の角度
             const cosAlpha = (ROBOT.L2 * ROBOT.L2 + D * D - ROBOT.L3 * ROBOT.L3) / (2 * ROBOT.L2 * D);
             const alpha = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
-            const beta = Math.atan2(r, -dy);
-            j2 = (beta - alpha) * 180 / Math.PI;
+
+            // 正しいJ2計算: 90° - atan2(dy, r) - alpha
+            // これはelbow-down configurationで、肩より上下どちらのターゲットにも対応
+            const targetAngle = Math.atan2(dy, r);  // ターゲット方向の角度（水平基準）
+            j2 = (Math.PI / 2 - targetAngle - alpha) * 180 / Math.PI;
         }
 
         // 関節制限
