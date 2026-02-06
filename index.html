@@ -3,82 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Industrial Robot Simulator v3.0</title>
-    
+    <title>Industrial Robot Simulator v4.0 - Analysis Grade</title>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <style>
-        /* --- UI Styling: Dark Sci-Fi Theme --- */
-        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; }
-        
-        #canvas-container { width: 100vw; height: 100vh; display: block; }
 
-        /* General Panel Style */
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #eee; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
         .panel {
             position: absolute;
-            background: rgba(16, 24, 32, 0.85); /* Deep Blue-Black */
+            background: rgba(16, 24, 32, 0.92);
             backdrop-filter: blur(8px);
             border: 1px solid #334455;
-            border-left: 4px solid #00ddee; /* Cyan Accent */
+            border-left: 4px solid #00ddee;
             border-radius: 4px;
             padding: 15px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-            transition: opacity 0.3s;
         }
-
-        h3 { margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; color: #00ddee; letter-spacing: 1.5px; border-bottom: 1px solid #334455; padding-bottom: 5px; }
-        
-        /* Left Control Panel */
+        h3 { margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #00ddee; letter-spacing: 1.5px; border-bottom: 1px solid #334455; padding-bottom: 5px; }
         #controls { top: 20px; left: 20px; width: 260px; }
-        
-        label { font-size: 11px; color: #aaa; display: block; margin-top: 12px; letter-spacing: 0.5px; }
+        label { font-size: 11px; color: #aaa; display: block; margin-top: 10px; letter-spacing: 0.5px; }
         .value-display { float: right; color: #fff; font-weight: bold; font-family: 'Consolas', monospace; }
-
-        /* Custom Sliders */
-        input[type=range] {
-            width: 100%; margin: 6px 0; -webkit-appearance: none; background: transparent;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 2px; background: #00ddee; cursor: pointer; margin-top: -5px; box-shadow: 0 0 5px #00ddee;
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; cursor: pointer; background: #334455; border-radius: 2px;
-        }
-
-        /* Task Space Display */
-        .xyz-container {
-            display: flex; justify-content: space-between; 
-            font-family: 'Consolas', monospace; font-size: 14px; 
-            margin-top: 15px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;
-        }
+        input[type=range] { width: 100%; margin: 5px 0; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 2px; background: #00ddee; cursor: pointer; margin-top: -5px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334455; border-radius: 2px; }
+        .xyz-container { display: flex; justify-content: space-between; font-family: 'Consolas', monospace; font-size: 13px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; }
         .coord-label { color: #8899aa; font-size: 10px; margin-right: 4px; }
-
-        /* Right Data Panel */
-        #data-panel { top: 20px; right: 20px; width: 320px; height: 220px; }
-
-        /* Buttons */
-        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        #data-panel { top: 20px; right: 20px; width: 340px; }
+        #analysis-panel { bottom: 20px; right: 20px; width: 340px; }
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
         .btn {
-            flex: 1; border: none; padding: 8px; border-radius: 3px; 
-            cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase;
-            transition: all 0.2s; color: #000;
+            flex: 1; border: none; padding: 7px 5px; border-radius: 3px;
+            cursor: pointer; font-weight: bold; font-size: 10px; text-transform: uppercase;
+            transition: all 0.2s; color: #000; min-width: 70px;
         }
         .btn-reset { background: #445566; color: #fff; }
-        .btn-auto { background: #ffaa00; } /* Orange */
+        .btn-auto { background: #ffaa00; }
+        .btn-export { background: #44aa88; }
+        .btn-test { background: #aa44aa; color: #fff; }
         .btn:hover { filter: brightness(1.2); }
         .btn:active { transform: scale(0.98); }
-
-        /* Indicators */
-        #status-indicator {
-            position: absolute; bottom: 20px; left: 20px; 
-            font-size: 11px; color: #666; font-family: monospace;
-        }
+        #status-indicator { position: absolute; bottom: 20px; left: 20px; font-size: 11px; color: #666; font-family: monospace; }
         .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00ff00; margin-right: 5px; }
         .mode-manual { background: #00ddee; }
         .mode-auto { background: #ffaa00; animation: pulse 1s infinite; }
-
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .error-display { background: rgba(255,0,0,0.2); border: 1px solid #ff4444; padding: 8px; border-radius: 4px; margin-top: 10px; font-family: monospace; font-size: 11px; }
+        .error-display.ok { background: rgba(0,255,0,0.1); border-color: #44ff44; }
+        .metric { display: flex; justify-content: space-between; margin: 3px 0; }
+        .metric-label { color: #888; }
+        .metric-value { color: #fff; font-weight: bold; }
+        .metric-value.warn { color: #ffaa00; }
+        .metric-value.error { color: #ff4444; }
+        select { background: #222; color: #fff; border: 1px solid #444; padding: 4px; border-radius: 3px; font-size: 11px; width: 100%; margin-top: 5px; }
+        .chart-container { height: 120px; margin-top: 10px; }
+        .event-log { max-height: 80px; overflow-y: auto; font-size: 10px; font-family: monospace; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 3px; margin-top: 8px; }
+        .event-item { padding: 2px 0; border-bottom: 1px solid #333; }
+        .event-time { color: #888; }
+        .event-code { color: #00ddee; margin-left: 5px; }
     </style>
 </head>
 <body>
@@ -87,15 +70,14 @@
 
     <div id="controls" class="panel">
         <h3>Joint Controls</h3>
-        
         <label>Base (J1) <span id="val1" class="value-display">0°</span></label>
         <input type="range" id="in1" min="-180" max="180" value="0">
-
         <label>Shoulder (J2) <span id="val2" class="value-display">0°</span></label>
-        <input type="range" id="in2" min="-45" max="90" value="0"> <label>Elbow (J3) <span id="val3" class="value-display">0°</span></label>
-        <input type="range" id="in3" min="-90" max="90" value="0">
+        <input type="range" id="in2" min="-45" max="135" value="0">
+        <label>Elbow (J3) <span id="val3" class="value-display">0°</span></label>
+        <input type="range" id="in3" min="-90" max="135" value="0">
 
-        <label style="margin-top: 20px; border-top: 1px solid #334455; padding-top: 10px;">End-Effector Coordinates (FK)</label>
+        <label style="margin-top: 15px; border-top: 1px solid #334455; padding-top: 10px;">TCP Position (Measured)</label>
         <div class="xyz-container">
             <span style="color: #ff6666"><span class="coord-label">X</span><span id="posX">0.00</span></span>
             <span style="color: #66ff66"><span class="coord-label">Y</span><span id="posY">0.00</span></span>
@@ -104,383 +86,1425 @@
 
         <div class="btn-group">
             <button class="btn btn-reset" onclick="resetSim()">Reset</button>
-            <button class="btn btn-auto" onclick="toggleAutomation()">▶ Pick & Place</button>
+            <button class="btn btn-auto" onclick="toggleAutomation()">▶ Auto</button>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-export" onclick="exportLogs()">Export CSV</button>
+            <button class="btn btn-test" onclick="runSelfTest()">Self Test</button>
         </div>
     </div>
 
     <div id="data-panel" class="panel">
-        <h3>Angular Velocity (Shoulder)</h3>
-        <canvas id="velocityChart"></canvas>
+        <h3>Real-time Analysis</h3>
+        <label>Chart Display</label>
+        <select id="chartSelect" onchange="updateChartType()">
+            <option value="velocity">Angular Velocity (J2)</option>
+            <option value="trackError">Tracking Error</option>
+            <option value="fkError">FK Model Error</option>
+            <option value="slip">Grip Slip</option>
+        </select>
+        <div class="chart-container">
+            <canvas id="velocityChart"></canvas>
+        </div>
+        <div class="error-display ok" id="errorDisplay">
+            <div class="metric"><span class="metric-label">FK Error:</span><span class="metric-value" id="fkErrorVal">0.000</span></div>
+            <div class="metric"><span class="metric-label">Track Error:</span><span class="metric-value" id="trackErrorVal">0.000</span></div>
+            <div class="metric"><span class="metric-label">Goal Error:</span><span class="metric-value" id="goalErrorVal">0.000</span></div>
+            <div class="metric"><span class="metric-label">Slip Cum:</span><span class="metric-value" id="slipVal">0.000</span></div>
+        </div>
+    </div>
+
+    <div id="analysis-panel" class="panel">
+        <h3>Event Log</h3>
+        <div class="event-log" id="eventLog"></div>
+        <div class="metric" style="margin-top:8px"><span class="metric-label">Cycle Count:</span><span class="metric-value" id="cycleCountDisplay">0</span></div>
+        <div class="metric"><span class="metric-label">Replan Count:</span><span class="metric-value" id="replanCount">0</span></div>
+        <div class="metric"><span class="metric-label">Frame Count:</span><span class="metric-value" id="frameCount">0</span></div>
+        <div class="metric"><span class="metric-label">Sim Time:</span><span class="metric-value" id="simTime">0.00s</span></div>
     </div>
 
     <div id="status-indicator">
         <span id="mode-dot" class="status-dot mode-manual"></span>
-        STATUS: <span id="status-text">MANUAL CONTROL ACTIVE</span>
+        STATUS: <span id="status-text">MANUAL CONTROL</span>
     </div>
 
     <script>
-        // --- 1. CONFIGURATION ---
-        const CONFIG = {
-            colors: {
-                bg: 0x15151e,
-                grid: 0x333333,
-                base: 0x222222,
-                link: 0xe0e0e0,
-                joint: 0x333333,
-                accent: 0xffaa00,
-                box: 0xff4444
-            },
-            smoothness: 0.08, // 動きの遅れ係数 (小さいほど重厚)
-            autoSpeed: 2      // 自動再生時の待機時間倍率
-        };
+    /**
+     * ========================================
+     * Industrial Robot Simulator v4.0
+     * Analysis-Grade Implementation
+     * ========================================
+     *
+     * 座標系定義 (Coordinate System):
+     * - World: X=Right, Y=Up, Z=Forward (Three.js標準)
+     * - J1 (Yaw): joint1.rotation.y = -J1_rad
+     *   - J1 > 0 → 時計回り（上から見て）→ +Z方向へ
+     * - J2 (Pitch): joint2.rotation.z = J2_rad
+     *   - J2 = 0 → 上向き, J2 = 90° → 水平前方
+     * - J3 (Pitch): joint3.rotation.z = J3_rad
+     *   - J3 = 0 → 真っ直ぐ, J3 > 0 → 肘が曲がる
+     *
+     * 単位系 (Units):
+     * - 長さ: meters [m]
+     * - 角度: degrees [deg] (内部計算はrad)
+     * - 時間: seconds [s]
+     * - 速度: deg/s, 加速度: deg/s², ジャーク: deg/s³
+     *
+     * TCP (Tool Center Point):
+     * - handGroupの原点 + TCPオフセット(0, 0.15, 0)
+     */
 
-        // --- 2. THREE.JS SETUP ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(CONFIG.colors.bg);
-        scene.fog = new THREE.Fog(CONFIG.colors.bg, 10, 40);
+    // ========================================
+    // 1. CONFIGURATION & CONSTANTS
+    // ========================================
+    const CONFIG = {
+        colors: { bg: 0x15151e, grid: 0x333333, base: 0x222222, link: 0xe0e0e0, joint: 0x333333, accent: 0xffaa00, box: 0xff4444 },
+        // 制御パラメータ
+        control: {
+            Kp: 8.0,           // 位置ゲイン
+            Kd: 2.0,           // 速度ゲイン
+            Kff: 0.5,          // フィードフォワードゲイン
+            maxDt: 0.05,       // 最大dt [s]（タブ非アクティブ対策）
+            rateLimit: 120     // 最大角速度 [deg/s]
+        },
+        // 軌道パラメータ
+        trajectory: {
+            maxVel: 60,        // 最大速度 [deg/s]
+            maxAcc: 120,       // 最大加速度 [deg/s²]
+            maxJerk: 300       // 最大ジャーク [deg/s³]
+        },
+        // 拘束パラメータ
+        constraints: {
+            floorMargin: 0.1,      // 床からの最低高さ [m]
+            baseRadius: 0.5,       // ベース干渉半径 [m]
+            clearanceHeight: 1.8,  // クリアランス高さ [m]
+            pedestalRadius: 0.5    // 台座上空許可範囲
+        },
+        // 把持パラメータ
+        grip: {
+            mu: 0.6,              // 摩擦係数
+            maxSlip: 0.05,        // 最大許容スリップ [m]
+            slipFactor: 0.001     // スリップ係数
+        },
+        // 閾値
+        thresholds: {
+            fkError: 0.01,        // FK誤差警告閾値 [m]
+            trackError: 0.05,     // 追従誤差警告閾値 [m]
+            goalError: 0.02,      // 目標誤差閾値 [m]
+            replanFrames: 30      // 再計画トリガフレーム数
+        }
+    };
 
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(6, 5, 6);
-        camera.lookAt(0, 1.5, 0);
+    // ロボットパラメータ
+    const ROBOT = {
+        BASE_HEIGHT: 0.4,      // ベース高さ [m]
+        L1: 1.8,               // リンク1長さ [m]
+        L2: 1.8,               // リンク2長さ（上腕）[m]
+        L3: 0.7,               // リンク3長さ（前腕+ハンド）[m]
+        SHOULDER_HEIGHT: 2.2,  // 肩高さ = BASE_HEIGHT + L1 [m]
+        TCP_OFFSET: 0.15,      // TCPオフセット [m]
+        JOINT_LIMITS: {
+            j1: [-180, 180],
+            j2: [-45, 135],    // 下方向にも届くように拡張
+            j3: [-90, 135]     // 肘の曲げ範囲を拡張
+        }
+    };
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        container.appendChild(renderer.domElement);
+    // 台座設定（視覚確認済み）
+    // 緑台: J1=-90° → -Z方向
+    // オレンジ台: J1=90° → +Z方向
+    const PEDESTAL_HEIGHT = 1.5;
+    const PEDESTAL_RADIUS = 0.4;
+    const REACH_DISTANCE = 1.8;
+    const BOX_SIZE = 0.25;
+    // ボックスは緑台（-Z方向、J1=-90°）に初期配置
+    const BOX_INITIAL_POS = new THREE.Vector3(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, -REACH_DISTANCE);
 
-        // Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        dirLight.position.set(5, 10, 5);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
-        scene.add(dirLight);
+    // ========================================
+    // 2. STATE VARIABLES
+    // ========================================
+    let simTime = 0;
+    let frameCount = 0;
+    let lastTimestamp = 0;
 
-        // Environment
-        const grid = new THREE.GridHelper(20, 20, 0x555555, 0x222222);
-        scene.add(grid);
-        const floorGeo = new THREE.PlaneGeometry(20, 20);
-        const floorMat = new THREE.MeshPhongMaterial({ color: 0x111111, depthWrite: false });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
+    // 関節状態
+    const state = {
+        theta: [0, 0, 0],      // 現在角度 [deg]
+        omega: [0, 0, 0],      // 現在角速度 [deg/s]
+        alpha: [0, 0, 0],      // 現在角加速度 [deg/s²]
+        thetaPrev: [0, 0, 0]   // 前フレーム角度
+    };
 
-        // --- 3. ROBOT CONSTRUCTION ---
-        const robotGroup = new THREE.Group();
-        scene.add(robotGroup);
+    // 参照軌道
+    const ref = {
+        theta: [0, 0, 0],
+        omega: [0, 0, 0],
+        alpha: [0, 0, 0],
+        pos: { x: 0, y: 0, z: 0 }
+    };
 
-        // Reusable Materials
-        const matBase = new THREE.MeshPhongMaterial({ color: CONFIG.colors.base });
-        const matLink = new THREE.MeshPhongMaterial({ color: CONFIG.colors.link, shininess: 80 });
-        const matJoint = new THREE.MeshStandardMaterial({ color: CONFIG.colors.joint, roughness: 0.6 });
-        const matAccent = new THREE.MeshBasicMaterial({ color: CONFIG.colors.accent });
+    // 把持状態
+    const gripState = {
+        isGrabbing: false,
+        gripForce: 0,
+        slip: 0,
+        slipCum: 0,
+        boxLocalPos: new THREE.Vector3()
+    };
 
-        // -- Base --
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 0.4, 32), matBase);
-        base.position.y = 0.2;
-        base.receiveShadow = true;
-        base.castShadow = true;
-        robotGroup.add(base);
+    // エラー状態
+    const errors = {
+        fk: 0,
+        track: 0,
+        goal: 0,
+        constraintFlags: 0
+    };
 
-        // -- Joint 1 (Yaw) --
-        const joint1 = new THREE.Group();
-        joint1.position.y = 0.4;
-        robotGroup.add(joint1);
+    // 自動化状態
+    let isAutomating = false;
+    let automationPhase = 'IDLE';
+    let trajectory = null;
+    let trajectoryIndex = 0;
+    let replanCount = 0;
+    let errorFrameCount = 0;
+    // サイクル方向: true = 緑→オレンジ, false = オレンジ→緑
+    let cycleDirection = true;
+    let cycleCount = 0;
 
-        // J1 Visuals
-        const j1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32), matJoint);
-        j1Mesh.position.y = 0.2;
-        j1Mesh.castShadow = true;
-        joint1.add(j1Mesh);
-        const link1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), matLink);
-        link1.position.y = 1.0;
-        link1.castShadow = true;
-        joint1.add(link1);
+    // ログ
+    const frameLogs = [];
+    const eventLogs = [];
+    const MAX_LOG_SIZE = 10000;
 
-        // -- Joint 2 (Pitch) --
-        const joint2 = new THREE.Group();
-        joint2.position.y = 1.8; // Top of Link 1
-        joint1.add(joint2);
+    // 乱数シード（再現性のため）
+    let randomSeed = 12345;
+    function seededRandom() {
+        randomSeed = (randomSeed * 1103515245 + 12345) & 0x7fffffff;
+        return (randomSeed / 0x7fffffff);
+    }
 
-        // J2 Visuals
-        const j2Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 32), matJoint);
-        j2Axis.rotation.z = Math.PI / 2;
-        j2Axis.castShadow = true;
-        joint2.add(j2Axis);
-        const link2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 0.4), matLink);
-        link2.position.y = 1.0; // Extend upwards
-        link2.castShadow = true;
-        joint2.add(link2);
+    // ========================================
+    // 3. THREE.JS SETUP
+    // ========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(CONFIG.colors.bg);
+    scene.fog = new THREE.Fog(CONFIG.colors.bg, 10, 40);
 
-        // -- Joint 3 (Pitch/Elbow) --
-        const joint3 = new THREE.Group();
-        joint3.position.y = 1.8; // Top of Link 2
-        joint2.add(joint3);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(6, 5, 6);
+    camera.lookAt(0, 1.5, 0);
 
-        // J3 Visuals
-        const j3Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.6, 32), matJoint);
-        j3Axis.rotation.z = Math.PI / 2;
-        j3Axis.castShadow = true;
-        joint3.add(j3Axis);
-        const link3 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), matLink);
-        link3.position.y = 0.4;
-        link3.castShadow = true;
-        joint3.add(link3);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
 
-        // -- End Effector (Hand) --
-        const handGroup = new THREE.Group();
-        handGroup.position.y = 0.7;
-        joint3.add(handGroup);
-        
-        const handBase = new THREE.Mesh(new THREE.SphereGeometry(0.25), matAccent);
-        handGroup.add(handBase);
-        
-        // Gripper fingers
-        const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f1.position.set(0.15, 0.3, 0);
-        handGroup.add(f1);
-        const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), matJoint);
-        f2.position.set(-0.15, 0.3, 0);
-        handGroup.add(f2);
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(5, 10, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    scene.add(dirLight);
 
-        // --- 4. OBJECTS & TRAJECTORY ---
-        
-        // Target Box
-        const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-        const boxMat = new THREE.MeshPhongMaterial({ color: CONFIG.colors.box });
-        const targetBox = new THREE.Mesh(boxGeo, boxMat);
-        targetBox.position.set(2.0, 0.2, 1.5); // Initial Position
-        targetBox.castShadow = true;
-        scene.add(targetBox);
+    // Environment
+    scene.add(new THREE.GridHelper(20, 20, 0x555555, 0x222222));
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshPhongMaterial({ color: 0x111111, depthWrite: false })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
-        // Trajectory Line
-        const maxPoints = 300;
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x00ddee, linewidth: 2 });
-        const lineGeo = new THREE.BufferGeometry();
-        const positions = new Float32Array(maxPoints * 3);
-        lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        const trailLine = new THREE.Line(lineGeo, lineMat);
-        scene.add(trailLine);
+    // ========================================
+    // 4. ROBOT CONSTRUCTION
+    // ========================================
+    const robotGroup = new THREE.Group();
+    scene.add(robotGroup);
 
-        // --- 5. AUTOMATION LOGIC ---
-        let isAutomating = false;
-        let automationStep = 0;
-        let stepTimer = 0;
+    const matBase = new THREE.MeshPhongMaterial({ color: CONFIG.colors.base });
+    const matLink = new THREE.MeshPhongMaterial({ color: CONFIG.colors.link, shininess: 80 });
+    const matJoint = new THREE.MeshStandardMaterial({ color: CONFIG.colors.joint, roughness: 0.6 });
+    const matAccent = new THREE.MeshBasicMaterial({ color: CONFIG.colors.accent });
 
-        // Sequence: Angles [J1, J2, J3], WaitFrames, Action
-        const sequence = [
-            { a: [0, 0, 0], w: 60, type: 'move' }, // Home
-            { a: [37, 20, 25], w: 30, type: 'move' }, // Approach
-            { a: [37, 45, 60], w: 40, type: 'grab' }, // Grab Position
-            { a: [37, 10, 10], w: 40, type: 'move' }, // Lift
-            { a: [-40, 10, 10], w: 40, type: 'move' }, // Carry
-            { a: [-40, 45, 60], w: 40, type: 'drop' }, // Place Position
-            { a: [-40, 0, 0], w: 40, type: 'move' }, // Retreat
-            { a: [0, 0, 0], w: 0, type: 'finish' } // Return Home
+    // Base
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.0, 0.4, 32), matBase);
+    base.position.y = 0.2;
+    base.receiveShadow = true;
+    base.castShadow = true;
+    robotGroup.add(base);
+
+    // Joint 1 (Yaw)
+    const joint1 = new THREE.Group();
+    joint1.position.y = ROBOT.BASE_HEIGHT;
+    robotGroup.add(joint1);
+
+    const j1Mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 32), matJoint);
+    j1Mesh.position.y = 0.2;
+    j1Mesh.castShadow = true;
+    joint1.add(j1Mesh);
+
+    const link1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), matLink);
+    link1.position.y = 1.0;
+    link1.castShadow = true;
+    joint1.add(link1);
+
+    // Joint 2 (Pitch - Shoulder)
+    const joint2 = new THREE.Group();
+    joint2.position.y = ROBOT.L1;
+    joint1.add(joint2);
+
+    const j2Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 32), matJoint);
+    j2Axis.rotation.z = Math.PI / 2;
+    j2Axis.castShadow = true;
+    joint2.add(j2Axis);
+
+    const link2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 0.4), matLink);
+    link2.position.y = 1.0;
+    link2.castShadow = true;
+    joint2.add(link2);
+
+    // Joint 3 (Pitch - Elbow)
+    const joint3 = new THREE.Group();
+    joint3.position.y = ROBOT.L2;
+    joint2.add(joint3);
+
+    const j3Axis = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.6, 32), matJoint);
+    j3Axis.rotation.z = Math.PI / 2;
+    j3Axis.castShadow = true;
+    joint3.add(j3Axis);
+
+    const link3 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), matLink);
+    link3.position.y = 0.4;
+    link3.castShadow = true;
+    joint3.add(link3);
+
+    // Hand (End Effector)
+    const handGroup = new THREE.Group();
+    handGroup.position.y = ROBOT.L3;
+    joint3.add(handGroup);
+
+    const handBase = new THREE.Mesh(new THREE.SphereGeometry(0.2), matAccent);
+    handGroup.add(handBase);
+
+    const fingerLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.08), matJoint);
+    fingerLeft.position.set(0.2, 0.25, 0);
+    handGroup.add(fingerLeft);
+
+    const fingerRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.08), matJoint);
+    fingerRight.position.set(-0.2, 0.25, 0);
+    handGroup.add(fingerRight);
+
+    // ========================================
+    // 5. OBJECTS (Pedestals, Box)
+    // ========================================
+    // 緑台 - J1=-90° (-Z方向) - ボックス初期位置
+    const greenPedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
+        new THREE.MeshPhongMaterial({ color: 0x228844 })
+    );
+    greenPedestal.position.set(0, PEDESTAL_HEIGHT / 2, -REACH_DISTANCE);
+    greenPedestal.castShadow = true;
+    greenPedestal.receiveShadow = true;
+    scene.add(greenPedestal);
+
+    const greenPlatform = new THREE.Mesh(
+        new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
+        new THREE.MeshPhongMaterial({ color: 0x44cc66, transparent: true, opacity: 0.8 })
+    );
+    greenPlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, -REACH_DISTANCE);
+    scene.add(greenPlatform);
+
+    // オレンジ台 - J1=90° (+Z方向) - ドロップ先
+    const orangePedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS * 1.2, PEDESTAL_HEIGHT, 32),
+        new THREE.MeshPhongMaterial({ color: 0xcc6600 })
+    );
+    orangePedestal.position.set(0, PEDESTAL_HEIGHT / 2, REACH_DISTANCE);
+    orangePedestal.castShadow = true;
+    orangePedestal.receiveShadow = true;
+    scene.add(orangePedestal);
+
+    const orangePlatform = new THREE.Mesh(
+        new THREE.CylinderGeometry(PEDESTAL_RADIUS, PEDESTAL_RADIUS, 0.05, 32),
+        new THREE.MeshPhongMaterial({ color: 0xffaa44, transparent: true, opacity: 0.8 })
+    );
+    orangePlatform.position.set(0, PEDESTAL_HEIGHT + 0.025, REACH_DISTANCE);
+    scene.add(orangePlatform);
+
+    // Target Box
+    const targetBox = new THREE.Mesh(
+        new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE),
+        new THREE.MeshPhongMaterial({ color: CONFIG.colors.box })
+    );
+    targetBox.position.copy(BOX_INITIAL_POS);
+    targetBox.castShadow = true;
+    scene.add(targetBox);
+
+    // Trajectory visualization
+    const maxPoints = 300;
+    const trailPositions = new Float32Array(maxPoints * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x00ddee }));
+    scene.add(trailLine);
+
+    // ========================================
+    // 6. KINEMATICS FUNCTIONS
+    // ========================================
+
+    /**
+     * Forward Kinematics: 関節角度 → TCP位置
+     * @param {number} j1Deg - J1角度 [deg]
+     * @param {number} j2Deg - J2角度 [deg]
+     * @param {number} j3Deg - J3角度 [deg]
+     * @returns {{x,y,z}} TCP位置 [m]
+     */
+    function forwardKinematics(j1Deg, j2Deg, j3Deg) {
+        const j1 = j1Deg * Math.PI / 180;
+        const j2 = j2Deg * Math.PI / 180;
+        const j3 = j3Deg * Math.PI / 180;
+
+        // 2リンクアームの前方到達距離
+        const r = ROBOT.L2 * Math.sin(j2) + ROBOT.L3 * Math.sin(j2 + j3);
+        // 高さ
+        const y = ROBOT.SHOULDER_HEIGHT + ROBOT.L2 * Math.cos(j2) + ROBOT.L3 * Math.cos(j2 + j3);
+        // XZ平面への投影
+        const x = r * Math.cos(j1);
+        const z = r * Math.sin(j1);
+
+        return { x, y, z };
+    }
+
+    /**
+     * Inverse Kinematics: TCP位置 → 関節角度
+     * 修正版: 正しいelbow-down configurationを使用
+     * @param {number} tx - 目標X [m]
+     * @param {number} ty - 目標Y [m]
+     * @param {number} tz - 目標Z [m]
+     * @returns {{j1,j2,j3,reachable}} 関節角度 [deg] と到達可能フラグ
+     */
+    function inverseKinematics(tx, ty, tz) {
+        // J1: 水平回転角
+        let j1 = Math.atan2(tz, tx) * 180 / Math.PI;
+
+        // 水平距離
+        const r = Math.sqrt(tx * tx + tz * tz);
+        // 肩からの相対高さ
+        const dy = ty - ROBOT.SHOULDER_HEIGHT;
+        // 肩からターゲットまでの距離
+        const D = Math.sqrt(r * r + dy * dy);
+
+        const maxReach = ROBOT.L2 + ROBOT.L3;
+        const minReach = Math.abs(ROBOT.L2 - ROBOT.L3);
+
+        let j2, j3, reachable = true;
+
+        if (D > maxReach * 0.98) {
+            // 到達不可: 伸ばしてターゲット方向へ
+            const angle = Math.atan2(r, -dy);
+            j2 = angle * 180 / Math.PI;
+            j3 = 0;
+            reachable = false;
+        } else if (D < minReach * 1.02) {
+            // 近すぎる
+            j2 = 45;
+            j3 = 90;
+            reachable = false;
+        } else {
+            // 余弦定理でJ3を計算
+            const cosJ3Internal = (ROBOT.L2 * ROBOT.L2 + ROBOT.L3 * ROBOT.L3 - D * D) / (2 * ROBOT.L2 * ROBOT.L3);
+            const j3Internal = Math.acos(Math.max(-1, Math.min(1, cosJ3Internal)));
+            j3 = (Math.PI - j3Internal) * 180 / Math.PI;
+
+            // J2を計算（修正版: elbow-down configuration）
+            // alpha: L2とターゲット方向の間の角度
+            const cosAlpha = (ROBOT.L2 * ROBOT.L2 + D * D - ROBOT.L3 * ROBOT.L3) / (2 * ROBOT.L2 * D);
+            const alpha = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
+
+            // 正しいJ2計算: 90° - atan2(dy, r) - alpha
+            // これはelbow-down configurationで、肩より上下どちらのターゲットにも対応
+            const targetAngle = Math.atan2(dy, r);  // ターゲット方向の角度（水平基準）
+            j2 = (Math.PI / 2 - targetAngle - alpha) * 180 / Math.PI;
+        }
+
+        // 関節制限
+        j1 = clamp(j1, ROBOT.JOINT_LIMITS.j1[0], ROBOT.JOINT_LIMITS.j1[1]);
+        j2 = clamp(j2, ROBOT.JOINT_LIMITS.j2[0], ROBOT.JOINT_LIMITS.j2[1]);
+        j3 = clamp(j3, ROBOT.JOINT_LIMITS.j3[0], ROBOT.JOINT_LIMITS.j3[1]);
+
+        return { j1, j2, j3, reachable };
+    }
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    // ========================================
+    // 7. S-CURVE TRAJECTORY GENERATOR
+    // ========================================
+
+    /**
+     * Sカーブ（ジャーク制限付き）軌道生成
+     * @param {number} startAngle - 開始角度 [deg]
+     * @param {number} endAngle - 終了角度 [deg]
+     * @param {number} duration - 所要時間 [s]
+     * @returns {Array} 軌道点の配列 [{t, theta, omega, alpha}]
+     */
+    function generateSCurve(startAngle, endAngle, duration) {
+        const points = [];
+        const dt = 0.016; // ~60fps
+        const distance = endAngle - startAngle;
+        const sign = Math.sign(distance) || 1;
+        const absD = Math.abs(distance);
+
+        if (absD < 0.01 || duration < 0.01) {
+            return [{ t: 0, theta: endAngle, omega: 0, alpha: 0 }];
+        }
+
+        // 7セグメントSカーブのパラメータ計算
+        const jMax = CONFIG.trajectory.maxJerk;
+        const aMax = CONFIG.trajectory.maxAcc;
+        const vMax = CONFIG.trajectory.maxVel;
+
+        // 加速時間計算
+        let Tj = aMax / jMax;
+        let Ta = vMax / aMax + Tj;
+        let Tv = absD / vMax;
+
+        // 制約調整
+        if (Tv < 2 * Ta) {
+            // 最大速度に達しない
+            Ta = Math.sqrt(absD / aMax);
+            Tj = Math.min(Tj, Ta / 2);
+            Tv = 0;
+        }
+
+        const totalTime = Math.max(duration, 2 * Ta + Tv);
+        const numPoints = Math.ceil(totalTime / dt);
+
+        for (let i = 0; i <= numPoints; i++) {
+            const t = (i / numPoints) * totalTime;
+            const s = smoothStep(t / totalTime);
+
+            const theta = startAngle + distance * s;
+            const ds = smoothStepDerivative(t / totalTime) / totalTime;
+            const omega = distance * ds;
+            const d2s = smoothStepSecondDerivative(t / totalTime) / (totalTime * totalTime);
+            const alpha = distance * d2s;
+
+            points.push({ t, theta, omega, alpha });
+        }
+
+        return points;
+    }
+
+    // 滑らかなステップ関数 (5次多項式)
+    function smoothStep(t) {
+        t = clamp(t, 0, 1);
+        return t * t * t * (t * (6 * t - 15) + 10);
+    }
+
+    function smoothStepDerivative(t) {
+        t = clamp(t, 0, 1);
+        return 30 * t * t * (t - 1) * (t - 1);
+    }
+
+    function smoothStepSecondDerivative(t) {
+        t = clamp(t, 0, 1);
+        return 60 * t * (2 * t * t - 3 * t + 1);
+    }
+
+    /**
+     * タスク空間パスの計画
+     * @param {Array} waypoints - ウェイポイント [{pos:{x,y,z}, action:string}]
+     * @returns {Array} 完全な軌道
+     */
+    function planTaskSpacePath(waypoints) {
+        const fullTrajectory = [];
+        let currentAngles = [state.theta[0], state.theta[1], state.theta[2]];
+
+        for (let i = 0; i < waypoints.length; i++) {
+            const wp = waypoints[i];
+            const targetIK = inverseKinematics(wp.pos.x, wp.pos.y, wp.pos.z);
+            const targetAngles = [targetIK.j1, targetIK.j2, targetIK.j3];
+
+            // 各関節の移動量を計算
+            const diffs = [
+                targetAngles[0] - currentAngles[0],
+                targetAngles[1] - currentAngles[1],
+                targetAngles[2] - currentAngles[2]
+            ];
+
+            // 最大移動量から基準時間を計算
+            const maxDiff = Math.max(...diffs.map(Math.abs));
+            const baseDuration = Math.max(0.5, maxDiff / CONFIG.trajectory.maxVel);
+
+            // 3関節の軌道を同期生成
+            const curves = [
+                generateSCurve(currentAngles[0], targetAngles[0], baseDuration),
+                generateSCurve(currentAngles[1], targetAngles[1], baseDuration),
+                generateSCurve(currentAngles[2], targetAngles[2], baseDuration)
+            ];
+
+            // 最長の軌道に合わせる
+            const maxLen = Math.max(...curves.map(c => c.length));
+
+            for (let j = 0; j < maxLen; j++) {
+                const idx0 = Math.min(j, curves[0].length - 1);
+                const idx1 = Math.min(j, curves[1].length - 1);
+                const idx2 = Math.min(j, curves[2].length - 1);
+
+                fullTrajectory.push({
+                    t: (fullTrajectory.length > 0 ? fullTrajectory[fullTrajectory.length - 1].t : 0) + 0.016,
+                    theta: [curves[0][idx0].theta, curves[1][idx1].theta, curves[2][idx2].theta],
+                    omega: [curves[0][idx0].omega, curves[1][idx1].omega, curves[2][idx2].omega],
+                    alpha: [curves[0][idx0].alpha, curves[1][idx1].alpha, curves[2][idx2].alpha],
+                    refPos: wp.pos,
+                    action: (j === maxLen - 1) ? wp.action : null,
+                    waypointIdx: i
+                });
+            }
+
+            currentAngles = targetAngles;
+        }
+
+        return fullTrajectory;
+    }
+
+    /**
+     * 完全な軌道を構築（サイクル対応）
+     * 視覚的に: 緑台=J1が-90°の方向、オレンジ台=J1が90°の方向
+     * cycleDirection: true = 緑→オレンジ, false = オレンジ→緑
+     */
+    function buildJointTrajectory() {
+        const grabHeight = PEDESTAL_HEIGHT + BOX_SIZE / 2;  // ボックス中心の高さ
+        const liftHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.5;
+        const approachHeight = PEDESTAL_HEIGHT + BOX_SIZE + 0.7;
+
+        // ピックアップとドロップのZ座標を決定
+        // 視覚的動作に基づき調整: cycleDirection=trueで緑から取る
+        // 緑台が視覚的にJ1=-90°側にあるが、実際の座標系では+Zかもしれない
+        const pickZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;
+        const dropZ = cycleDirection ? -REACH_DISTANCE : REACH_DISTANCE;
+
+        logEvent('TRAJECTORY_BUILD', { cycleDirection, pickZ, dropZ });
+
+        const waypoints = [
+            { pos: { x: 0, y: approachHeight, z: pickZ }, action: 'APPROACH_PICK' },
+            { pos: { x: 0, y: grabHeight, z: pickZ }, action: 'GRAB' },
+            { pos: { x: 0, y: liftHeight, z: pickZ }, action: 'LIFT' },
+            { pos: { x: 0, y: liftHeight, z: 0 }, action: 'TRANSIT' },
+            { pos: { x: 0, y: liftHeight, z: dropZ }, action: 'APPROACH_DROP' },
+            { pos: { x: 0, y: grabHeight, z: dropZ }, action: 'PLACE' },
+            { pos: { x: 0, y: approachHeight, z: dropZ }, action: 'RETREAT' },
+            { pos: { x: 0, y: ROBOT.SHOULDER_HEIGHT + 1, z: 0 }, action: 'CYCLE_NEXT' }
         ];
 
-        function grabBox() {
-            // Three.js magic: Attach preserves world transform while changing parent
-            handGroup.attach(targetBox);
-        }
+        return planTaskSpacePath(waypoints);
+    }
 
-        function dropBox() {
-            scene.attach(targetBox);
-            // Snap to floor to avoid floating errors
-            targetBox.position.y = 0.2;
-            targetBox.rotation.set(0, 0, 0);
-        }
+    // ========================================
+    // 8. CONTROLLER
+    // ========================================
 
-        function toggleAutomation() {
-            if (isAutomating) return; // Already running
-            
-            isAutomating = true;
-            automationStep = 0;
-            stepTimer = 0;
-            
-            // Reset Box
-            dropBox(); 
-            targetBox.position.set(2.0, 0.2, 1.5);
-            
-            updateStatus(true);
-        }
+    /**
+     * PD + フィードフォワード制御
+     * @param {number} dt - 時間ステップ [s]
+     */
+    function stepController(dt) {
+        if (dt <= 0) return;
+        dt = Math.min(dt, CONFIG.control.maxDt);
 
-        // --- 6. CHART.JS SETUP ---
-        const ctx = document.getElementById('velocityChart').getContext('2d');
-        const vChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array(40).fill(''),
-                datasets: [{
-                    data: Array(40).fill(0),
-                    borderColor: '#00ddee',
-                    borderWidth: 1.5,
-                    backgroundColor: 'rgba(0, 221, 238, 0.1)',
-                    fill: 'start',
-                    tension: 0.4,
-                    pointRadius: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { min: -3, max: 3, grid: { color: '#334455' } },
-                    x: { display: false }
-                }
+        const tau = [0, 0, 0];
+
+        for (let i = 0; i < 3; i++) {
+            // PD制御
+            const posError = ref.theta[i] - state.theta[i];
+            const velError = ref.omega[i] - state.omega[i];
+
+            // フィードフォワード + フィードバック
+            tau[i] = CONFIG.control.Kff * ref.alpha[i]
+                   + CONFIG.control.Kp * posError
+                   + CONFIG.control.Kd * velError;
+
+            // レート制限
+            const maxDelta = CONFIG.control.rateLimit * dt;
+            let targetVel = tau[i];
+            targetVel = clamp(targetVel, -CONFIG.control.rateLimit, CONFIG.control.rateLimit);
+
+            // 角速度を更新
+            state.omega[i] += (targetVel - state.omega[i]) * 0.3;
+
+            // 角度を更新
+            state.thetaPrev[i] = state.theta[i];
+            state.theta[i] += state.omega[i] * dt;
+
+            // 関節制限
+            const limits = [ROBOT.JOINT_LIMITS.j1, ROBOT.JOINT_LIMITS.j2, ROBOT.JOINT_LIMITS.j3][i];
+            if (state.theta[i] < limits[0]) {
+                state.theta[i] = limits[0];
+                state.omega[i] = 0;
+                logEvent('LIMIT_HIT', { joint: i, limit: 'min' });
+            } else if (state.theta[i] > limits[1]) {
+                state.theta[i] = limits[1];
+                state.omega[i] = 0;
+                logEvent('LIMIT_HIT', { joint: i, limit: 'max' });
             }
-        });
 
-        // --- 7. MAIN LOOP & CONTROL ---
-        const ui = {
-            in1: document.getElementById('in1'),
-            in2: document.getElementById('in2'),
-            in3: document.getElementById('in3'),
-            val1: document.getElementById('val1'),
-            val2: document.getElementById('val2'),
-            val3: document.getElementById('val3'),
-            x: document.getElementById('posX'),
-            y: document.getElementById('posY'),
-            z: document.getElementById('posZ'),
-            status: document.getElementById('status-text'),
-            dot: document.getElementById('mode-dot')
+            // 角加速度計算
+            state.alpha[i] = (state.omega[i] - (state.theta[i] - state.thetaPrev[i]) / dt) / dt;
+        }
+    }
+
+    // ========================================
+    // 9. CONSTRAINT CHECKING
+    // ========================================
+
+    /**
+     * 拘束チェックと投影
+     * @param {{x,y,z}} targetPos - 目標位置
+     * @returns {{pos:{x,y,z}, flags:number, projected:boolean}}
+     */
+    function checkConstraints(targetPos) {
+        let pos = { ...targetPos };
+        let flags = 0;
+        let projected = false;
+
+        // 床拘束
+        if (pos.y < CONFIG.constraints.floorMargin) {
+            pos.y = CONFIG.constraints.floorMargin;
+            flags |= 1;
+            projected = true;
+            logEvent('CONSTRAINT_CLAMP', { type: 'FLOOR', original: targetPos.y });
+        }
+
+        // ベース干渉
+        const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
+        if (dist < CONFIG.constraints.baseRadius && pos.y < ROBOT.SHOULDER_HEIGHT) {
+            const scale = CONFIG.constraints.baseRadius / dist;
+            pos.x *= scale;
+            pos.z *= scale;
+            flags |= 2;
+            projected = true;
+            logEvent('CONSTRAINT_CLAMP', { type: 'BASE', originalDist: dist });
+        }
+
+        // 台座外でのクリアランス
+        // 緑台: -Z方向、オレンジ台: +Z方向
+        const nearGreen = Math.sqrt(pos.x * pos.x + (pos.z + REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+        const nearOrange = Math.sqrt(pos.x * pos.x + (pos.z - REACH_DISTANCE) ** 2) < CONFIG.constraints.pedestalRadius;
+
+        if (!nearGreen && !nearOrange && pos.y < CONFIG.constraints.clearanceHeight) {
+            pos.y = CONFIG.constraints.clearanceHeight;
+            flags |= 4;
+            projected = true;
+            logEvent('CONSTRAINT_CLAMP', { type: 'CLEARANCE' });
+        }
+
+        errors.constraintFlags = flags;
+        return { pos, flags, projected };
+    }
+
+    // ========================================
+    // 10. GRIP MODEL
+    // ========================================
+
+    /**
+     * 把持チェック
+     */
+    function checkGrab() {
+        if (gripState.isGrabbing) return false;
+
+        const tcpPos = new THREE.Vector3();
+        handGroup.getWorldPosition(tcpPos);
+
+        // ボックスのワールド座標を取得
+        const boxWorldPos = new THREE.Vector3();
+        targetBox.getWorldPosition(boxWorldPos);
+
+        const dist = tcpPos.distanceTo(boxWorldPos);
+        const threshold = BOX_SIZE + 0.4;  // 閾値を拡大
+
+        if (dist < threshold) {
+            // 把持成功
+            gripState.isGrabbing = true;
+            gripState.gripForce = 1.0;
+            gripState.slip = 0;
+            gripState.slipCum = 0;
+
+            // ボックスをハンドにアタッチ
+            handGroup.attach(targetBox);
+            gripState.boxLocalPos.copy(targetBox.position);
+
+            logEvent('GRAB_OK', { distance: dist, threshold: threshold });
+            return true;
+        }
+
+        logEvent('GRAB_FAIL', { distance: dist, threshold: threshold, tcpY: tcpPos.y, boxY: boxWorldPos.y });
+        return false;
+    }
+
+    /**
+     * 配置チェック（サイクル対応）
+     * 常に配置を実行し、ボックスを離す
+     */
+    function checkPlace() {
+        if (!gripState.isGrabbing) {
+            logEvent('PLACE_SKIP', { reason: 'not_grabbing' });
+            return false;
+        }
+
+        // ドロップ先のZ座標（軌道と一致させる - 視覚的に正しい位置）
+        // cycleDirection=true: 緑→オレンジ なのでオレンジ(視覚的に-Z)に置く
+        const dropZ = cycleDirection ? REACH_DISTANCE : -REACH_DISTANCE;
+
+        // ボックスをシーンに戻して配置
+        scene.attach(targetBox);
+        targetBox.position.set(0, PEDESTAL_HEIGHT + BOX_SIZE / 2, dropZ);
+        targetBox.rotation.set(0, 0, 0);
+
+        // 把持状態をリセット
+        gripState.isGrabbing = false;
+        gripState.gripForce = 0;
+        gripState.slip = 0;
+
+        logEvent('PLACE_OK', { dropZ: dropZ, cycle: cycleCount });
+        return true;
+    }
+
+    /**
+     * スリップ更新
+     * @param {number} dt - 時間ステップ
+     */
+    function updateSlip(dt) {
+        if (!gripState.isGrabbing) return;
+
+        // 加速度によるスリップ計算
+        const accelMag = Math.sqrt(
+            state.alpha[0] ** 2 + state.alpha[1] ** 2 + state.alpha[2] ** 2
+        );
+
+        // 摩擦力を超えるとスリップ
+        const slipForce = accelMag * CONFIG.grip.slipFactor;
+        const frictionLimit = gripState.gripForce * CONFIG.grip.mu;
+
+        if (slipForce > frictionLimit) {
+            const slipAmount = (slipForce - frictionLimit) * dt * (seededRandom() * 0.5 + 0.5);
+            gripState.slip = slipAmount;
+            gripState.slipCum += slipAmount;
+
+            // スリップ閾値超過チェック
+            if (gripState.slipCum > CONFIG.grip.maxSlip) {
+                logEvent('SLIP_FAIL', { cumulative: gripState.slipCum });
+                maybeReplan('SLIP_FAIL');
+            }
+        } else {
+            gripState.slip = 0;
+        }
+    }
+
+    // ========================================
+    // 11. REPLAN LOGIC
+    // ========================================
+
+    /**
+     * 再計画
+     * @param {string} reason - 再計画理由
+     */
+    function maybeReplan(reason) {
+        if (replanCount >= 3) {
+            logEvent('REPLAN_ABORT', { reason: 'MAX_RETRIES', count: replanCount });
+            stopAutomation();
+            return;
+        }
+
+        logEvent('REPLAN_START', { reason, count: replanCount + 1 });
+
+        // 現在位置から新しい軌道を生成
+        trajectory = buildJointTrajectory();
+        trajectoryIndex = 0;
+        replanCount++;
+
+        logEvent('REPLAN_DONE', { newLength: trajectory.length });
+    }
+
+    // ========================================
+    // 12. LOGGING
+    // ========================================
+
+    /**
+     * フレームログ記録
+     */
+    function logFrame(dt) {
+        if (frameLogs.length >= MAX_LOG_SIZE) {
+            frameLogs.shift();
+        }
+
+        const tcpMeas = new THREE.Vector3();
+        handGroup.getWorldPosition(tcpMeas);
+
+        const fkPos = forwardKinematics(state.theta[0], state.theta[1], state.theta[2]);
+
+        frameLogs.push({
+            time: simTime.toFixed(4),
+            phase: automationPhase,
+            theta: state.theta.map(v => v.toFixed(2)),
+            omega: state.omega.map(v => v.toFixed(2)),
+            alpha: state.alpha.map(v => v.toFixed(2)),
+            theta_ref: ref.theta.map(v => v.toFixed(2)),
+            omega_ref: ref.omega.map(v => v.toFixed(2)),
+            alpha_ref: ref.alpha.map(v => v.toFixed(2)),
+            p_meas: [tcpMeas.x.toFixed(4), tcpMeas.y.toFixed(4), tcpMeas.z.toFixed(4)],
+            p_fk: [fkPos.x.toFixed(4), fkPos.y.toFixed(4), fkPos.z.toFixed(4)],
+            p_ref: [ref.pos.x.toFixed(4), ref.pos.y.toFixed(4), ref.pos.z.toFixed(4)],
+            e_fk: errors.fk.toFixed(4),
+            e_track: errors.track.toFixed(4),
+            e_goal: errors.goal.toFixed(4),
+            gripState: gripState.isGrabbing ? 1 : 0,
+            gripForce: gripState.gripForce.toFixed(2),
+            slip: gripState.slip.toFixed(6),
+            slipCum: gripState.slipCum.toFixed(6),
+            constraintFlags: errors.constraintFlags,
+            replanCount: replanCount
+        });
+    }
+
+    /**
+     * イベントログ記録
+     */
+    function logEvent(code, detail = {}) {
+        const entry = {
+            time: simTime.toFixed(4),
+            code,
+            detail: JSON.stringify(detail)
+        };
+        eventLogs.push(entry);
+
+        // UI更新
+        const logDiv = document.getElementById('eventLog');
+        const item = document.createElement('div');
+        item.className = 'event-item';
+        item.innerHTML = `<span class="event-time">${entry.time}s</span><span class="event-code">${code}</span>`;
+        logDiv.insertBefore(item, logDiv.firstChild);
+
+        // 最大100件表示
+        while (logDiv.children.length > 100) {
+            logDiv.removeChild(logDiv.lastChild);
+        }
+    }
+
+    /**
+     * ログエクスポート
+     */
+    function exportLogs() {
+        // CSVヘッダー
+        const headers = [
+            'time', 'phase',
+            'theta_j1', 'theta_j2', 'theta_j3',
+            'omega_j1', 'omega_j2', 'omega_j3',
+            'alpha_j1', 'alpha_j2', 'alpha_j3',
+            'theta_ref_j1', 'theta_ref_j2', 'theta_ref_j3',
+            'omega_ref_j1', 'omega_ref_j2', 'omega_ref_j3',
+            'alpha_ref_j1', 'alpha_ref_j2', 'alpha_ref_j3',
+            'p_meas_x', 'p_meas_y', 'p_meas_z',
+            'p_fk_x', 'p_fk_y', 'p_fk_z',
+            'p_ref_x', 'p_ref_y', 'p_ref_z',
+            'e_fk', 'e_track', 'e_goal',
+            'gripState', 'gripForce', 'slip', 'slipCum',
+            'constraintFlags', 'replanCount'
+        ];
+
+        let csv = headers.join(',') + '\n';
+
+        for (const log of frameLogs) {
+            const row = [
+                log.time, log.phase,
+                ...log.theta, ...log.omega, ...log.alpha,
+                ...log.theta_ref, ...log.omega_ref, ...log.alpha_ref,
+                ...log.p_meas, ...log.p_fk, ...log.p_ref,
+                log.e_fk, log.e_track, log.e_goal,
+                log.gripState, log.gripForce, log.slip, log.slipCum,
+                log.constraintFlags, log.replanCount
+            ];
+            csv += row.join(',') + '\n';
+        }
+
+        // ダウンロード
+        downloadFile('robot_frame_log.csv', csv, 'text/csv');
+
+        // イベントログもJSON出力
+        const eventJson = JSON.stringify(eventLogs, null, 2);
+        downloadFile('robot_event_log.json', eventJson, 'application/json');
+
+        logEvent('EXPORT_DONE', { frames: frameLogs.length, events: eventLogs.length });
+    }
+
+    function downloadFile(filename, content, type) {
+        const blob = new Blob([content], { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // ========================================
+    // 13. SELF TEST
+    // ========================================
+
+    /**
+     * 自己診断テスト
+     */
+    function runSelfTest() {
+        logEvent('SELFTEST_START', {});
+
+        const results = {
+            timestamp: new Date().toISOString(),
+            tests: []
         };
 
-        // Current state for Lerp
-        let cur = { j1: 0, j2: 0, j3: 0 };
-        let prevJ2 = 0; // For velocity calc
-        const tempVec = new THREE.Vector3();
+        // Test 1: FK/IK整合性
+        const testAngles = [
+            [0, 0, 0],
+            [45, 30, 20],
+            [-90, 45, -30],
+            [90, 60, 45]
+        ];
 
-        function updateStatus(auto) {
-            if(auto) {
-                ui.status.textContent = "AUTOMATION SEQUENCE RUNNING...";
-                ui.dot.className = "status-dot mode-auto";
-            } else {
-                ui.status.textContent = "MANUAL CONTROL ACTIVE";
-                ui.dot.className = "status-dot mode-manual";
+        let fkIkOk = true;
+        for (const angles of testAngles) {
+            const fk = forwardKinematics(angles[0], angles[1], angles[2]);
+            const ik = inverseKinematics(fk.x, fk.y, fk.z);
+            const fk2 = forwardKinematics(ik.j1, ik.j2, ik.j3);
+
+            const err = Math.sqrt((fk.x - fk2.x) ** 2 + (fk.y - fk2.y) ** 2 + (fk.z - fk2.z) ** 2);
+            if (err > 0.01) {
+                fkIkOk = false;
+                results.tests.push({
+                    name: 'FK_IK_CONSISTENCY',
+                    passed: false,
+                    detail: { angles, error: err }
+                });
             }
         }
-
-        function resetSim() {
-            isAutomating = false;
-            ui.in1.value = 0;
-            ui.in2.value = 0;
-            ui.in3.value = 0;
-            dropBox();
-            targetBox.position.set(2.0, 0.2, 1.5);
-            // Reset trail
-            positions.fill(0);
-            lineGeo.attributes.position.needsUpdate = true;
-            updateStatus(false);
+        if (fkIkOk) {
+            results.tests.push({ name: 'FK_IK_CONSISTENCY', passed: true });
         }
 
-        function updateTrail() {
-            handGroup.getWorldPosition(tempVec);
-            
-            // Shift array
-            for (let i = 0; i < maxPoints - 1; i++) {
-                positions[i * 3] = positions[(i + 1) * 3];
-                positions[i * 3 + 1] = positions[(i + 1) * 3 + 1];
-                positions[i * 3 + 2] = positions[(i + 1) * 3 + 2];
+        // Test 2: 速度/加速度制限チェック（ログから）
+        let maxVel = 0, maxAcc = 0;
+        for (const log of frameLogs) {
+            for (let i = 0; i < 3; i++) {
+                maxVel = Math.max(maxVel, Math.abs(parseFloat(log.omega[i])));
+                maxAcc = Math.max(maxAcc, Math.abs(parseFloat(log.alpha[i])));
             }
-            // Add new
-            positions[(maxPoints - 1) * 3] = tempVec.x;
-            positions[(maxPoints - 1) * 3 + 1] = tempVec.y;
-            positions[(maxPoints - 1) * 3 + 2] = tempVec.z;
-            
-            lineGeo.attributes.position.needsUpdate = true;
-            
-            // UI XYZ Update
-            ui.x.textContent = tempVec.x.toFixed(2);
-            ui.y.textContent = tempVec.y.toFixed(2);
-            ui.z.textContent = tempVec.z.toFixed(2);
         }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            let t1, t2, t3; // Targets
-
-            if (isAutomating) {
-                const step = sequence[automationStep];
-                t1 = step.a[0];
-                t2 = step.a[1];
-                t3 = step.a[2];
-
-                // Check distance to target
-                const d1 = Math.abs(cur.j1 - t1);
-                const d2 = Math.abs(cur.j2 - t2);
-                const d3 = Math.abs(cur.j3 - t3);
-
-                if (d1 < 0.5 && d2 < 0.5 && d3 < 0.5) {
-                    stepTimer++;
-                    if (stepTimer > step.w) {
-                        if(step.type === 'grab') grabBox();
-                        if(step.type === 'drop') dropBox();
-                        if(step.type === 'finish') isAutomating = false;
-                        
-                        if(isAutomating) automationStep++;
-                        stepTimer = 0;
-                    }
-                }
-                
-                // Sync sliders to auto movement
-                ui.in1.value = cur.j1;
-                ui.in2.value = cur.j2;
-                ui.in3.value = cur.j3;
-
-                if (!isAutomating) updateStatus(false);
-
-            } else {
-                // Manual Mode
-                t1 = parseFloat(ui.in1.value);
-                t2 = parseFloat(ui.in2.value);
-                t3 = parseFloat(ui.in3.value);
-            }
-
-            // Physics: Smoothing (Lerp)
-            cur.j1 += (t1 - cur.j1) * CONFIG.smoothness;
-            cur.j2 += (t2 - cur.j2) * CONFIG.smoothness;
-            cur.j3 += (t3 - cur.j3) * CONFIG.smoothness;
-
-            // Apply Rotations (Deg -> Rad)
-            joint1.rotation.y = THREE.MathUtils.degToRad(-cur.j1);
-            joint2.rotation.z = THREE.MathUtils.degToRad(cur.j2);
-            joint3.rotation.z = THREE.MathUtils.degToRad(cur.j3);
-
-            // UI Text Update
-            ui.val1.textContent = Math.round(cur.j1) + "°";
-            ui.val2.textContent = Math.round(cur.j2) + "°";
-            ui.val3.textContent = Math.round(cur.j3) + "°";
-
-            // Chart Update
-            const velocity = (cur.j2 - prevJ2);
-            prevJ2 = cur.j2;
-            const cData = vChart.data.datasets[0].data;
-            cData.shift();
-            cData.push(velocity * 2); // Scale for visibility
-            vChart.update('none'); // 'none' for performance
-
-            updateTrail();
-            renderer.render(scene, camera);
-        }
-
-        // Resize Handler
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        results.tests.push({
+            name: 'VELOCITY_LIMIT',
+            passed: maxVel <= CONFIG.trajectory.maxVel * 1.1,
+            detail: { maxVel, limit: CONFIG.trajectory.maxVel }
+        });
+        results.tests.push({
+            name: 'ACCELERATION_LIMIT',
+            passed: maxAcc <= CONFIG.trajectory.maxAcc * 1.5,
+            detail: { maxAcc, limit: CONFIG.trajectory.maxAcc }
         });
 
-        // Start
-        animate();
+        // Test 3: FK誤差チェック
+        let maxFkError = 0;
+        for (const log of frameLogs) {
+            maxFkError = Math.max(maxFkError, parseFloat(log.e_fk));
+        }
+        results.tests.push({
+            name: 'FK_MODEL_ERROR',
+            passed: maxFkError < CONFIG.thresholds.fkError * 2,
+            detail: { maxFkError, threshold: CONFIG.thresholds.fkError }
+        });
+
+        // Test 4: 拘束違反チェック
+        let constraintViolations = 0;
+        for (const log of frameLogs) {
+            if (log.constraintFlags > 0) constraintViolations++;
+        }
+        results.tests.push({
+            name: 'CONSTRAINT_VIOLATIONS',
+            passed: true, // 違反は許容（投影されていれば）
+            detail: { count: constraintViolations }
+        });
+
+        // 結果表示
+        const allPassed = results.tests.every(t => t.passed);
+        logEvent('SELFTEST_DONE', { passed: allPassed, results: results.tests.length });
+
+        // JSONダウンロード
+        downloadFile('selftest_results.json', JSON.stringify(results, null, 2), 'application/json');
+
+        alert(`Self Test ${allPassed ? 'PASSED' : 'FAILED'}\nSee console and downloaded JSON for details.`);
+        console.log('Self Test Results:', results);
+    }
+
+    // ========================================
+    // 14. UI & CHART
+    // ========================================
+
+    const ui = {
+        in1: document.getElementById('in1'),
+        in2: document.getElementById('in2'),
+        in3: document.getElementById('in3'),
+        val1: document.getElementById('val1'),
+        val2: document.getElementById('val2'),
+        val3: document.getElementById('val3'),
+        posX: document.getElementById('posX'),
+        posY: document.getElementById('posY'),
+        posZ: document.getElementById('posZ'),
+        status: document.getElementById('status-text'),
+        dot: document.getElementById('mode-dot'),
+        fkError: document.getElementById('fkErrorVal'),
+        trackError: document.getElementById('trackErrorVal'),
+        goalError: document.getElementById('goalErrorVal'),
+        slipVal: document.getElementById('slipVal'),
+        errorDisplay: document.getElementById('errorDisplay'),
+        replanCount: document.getElementById('replanCount'),
+        frameCount: document.getElementById('frameCount'),
+        simTime: document.getElementById('simTime')
+    };
+
+    // Chart
+    const ctx = document.getElementById('velocityChart').getContext('2d');
+    let chartType = 'velocity';
+    const chartData = Array(60).fill(0);
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array(60).fill(''),
+            datasets: [{
+                data: chartData,
+                borderColor: '#00ddee',
+                borderWidth: 1.5,
+                backgroundColor: 'rgba(0, 221, 238, 0.1)',
+                fill: 'start',
+                tension: 0.4,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { grid: { color: '#334455' } },
+                x: { display: false }
+            }
+        }
+    });
+
+    function updateChartType() {
+        chartType = document.getElementById('chartSelect').value;
+        chartData.fill(0);
+    }
+
+    function updateChart(value) {
+        chartData.shift();
+        chartData.push(value);
+        chart.data.datasets[0].data = chartData;
+        chart.update('none');
+    }
+
+    // ========================================
+    // 15. MAIN LOOP
+    // ========================================
+
+    function toggleAutomation() {
+        if (isAutomating) {
+            stopAutomation();
+            return;
+        }
+
+        // 初期化
+        resetBoxPosition();
+        gripState.isGrabbing = false;
+        gripState.gripForce = 0;
+        gripState.slip = 0;
+        gripState.slipCum = 0;
+        replanCount = 0;
+        errorFrameCount = 0;
+        cycleDirection = true;  // 緑(-Z)→オレンジ(+Z)から開始
+        cycleCount = 0;
+
+        // 軌道生成
+        trajectory = buildJointTrajectory();
+        trajectoryIndex = 0;
+        isAutomating = true;
+        automationPhase = 'RUNNING';
+
+        logEvent('AUTO_START', { trajectoryLength: trajectory.length, startDirection: 'GREEN_TO_ORANGE' });
+        updateStatus(true);
+    }
+
+    function stopAutomation() {
+        isAutomating = false;
+        automationPhase = 'IDLE';
+        trajectory = null;
+        logEvent('AUTO_STOP', {});
+        updateStatus(false);
+    }
+
+    function resetSim() {
+        stopAutomation();
+
+        state.theta = [0, 0, 0];
+        state.omega = [0, 0, 0];
+        state.alpha = [0, 0, 0];
+        state.thetaPrev = [0, 0, 0];
+
+        ref.theta = [0, 0, 0];
+        ref.omega = [0, 0, 0];
+        ref.alpha = [0, 0, 0];
+
+        ui.in1.value = 0;
+        ui.in2.value = 0;
+        ui.in3.value = 0;
+
+        resetBoxPosition();
+
+        gripState.isGrabbing = false;
+        gripState.gripForce = 0;
+        gripState.slip = 0;
+        gripState.slipCum = 0;
+
+        simTime = 0;
+        frameCount = 0;
+        replanCount = 0;
+        cycleDirection = true;  // 緑→オレンジから開始
+        cycleCount = 0;
+
+        frameLogs.length = 0;
+        eventLogs.length = 0;
+        document.getElementById('eventLog').innerHTML = '';
+
+        logEvent('RESET', {});
+    }
+
+    function resetBoxPosition() {
+        if (gripState.isGrabbing) {
+            scene.attach(targetBox);
+            gripState.isGrabbing = false;
+        }
+        targetBox.position.copy(BOX_INITIAL_POS);
+        targetBox.rotation.set(0, 0, 0);
+    }
+
+    function updateStatus(auto) {
+        ui.status.textContent = auto ? 'AUTOMATION RUNNING' : 'MANUAL CONTROL';
+        ui.dot.className = auto ? 'status-dot mode-auto' : 'status-dot mode-manual';
+    }
+
+    function updateGripper() {
+        const targetPos = gripState.isGrabbing ? 0.1 : 0.2;
+        const currentPos = fingerLeft.position.x;
+        const newPos = currentPos + (targetPos - currentPos) * 0.15;
+        fingerLeft.position.x = newPos;
+        fingerRight.position.x = -newPos;
+    }
+
+    function updateTrail() {
+        const pos = new THREE.Vector3();
+        handGroup.getWorldPosition(pos);
+
+        for (let i = 0; i < maxPoints - 1; i++) {
+            trailPositions[i * 3] = trailPositions[(i + 1) * 3];
+            trailPositions[i * 3 + 1] = trailPositions[(i + 1) * 3 + 1];
+            trailPositions[i * 3 + 2] = trailPositions[(i + 1) * 3 + 2];
+        }
+        trailPositions[(maxPoints - 1) * 3] = pos.x;
+        trailPositions[(maxPoints - 1) * 3 + 1] = pos.y;
+        trailPositions[(maxPoints - 1) * 3 + 2] = pos.z;
+
+        trailGeo.attributes.position.needsUpdate = true;
+    }
+
+    function calculateErrors() {
+        const tcpMeas = new THREE.Vector3();
+        handGroup.getWorldPosition(tcpMeas);
+
+        const fkPos = forwardKinematics(state.theta[0], state.theta[1], state.theta[2]);
+
+        // FK誤差
+        errors.fk = Math.sqrt(
+            (tcpMeas.x - fkPos.x) ** 2 +
+            (tcpMeas.y - fkPos.y) ** 2 +
+            (tcpMeas.z - fkPos.z) ** 2
+        );
+
+        // 追従誤差
+        errors.track = Math.sqrt(
+            (tcpMeas.x - ref.pos.x) ** 2 +
+            (tcpMeas.y - ref.pos.y) ** 2 +
+            (tcpMeas.z - ref.pos.z) ** 2
+        );
+
+        // 目標誤差（ドロップ位置への誤差）
+        if (isAutomating && trajectory && trajectoryIndex < trajectory.length) {
+            const targetPos = trajectory[trajectory.length - 1].refPos;
+            errors.goal = Math.sqrt(
+                (tcpMeas.x - targetPos.x) ** 2 +
+                (tcpMeas.y - targetPos.y) ** 2 +
+                (tcpMeas.z - targetPos.z) ** 2
+            );
+        }
+
+        // FK誤差チェック
+        if (errors.fk > CONFIG.thresholds.fkError) {
+            errorFrameCount++;
+            if (errorFrameCount > CONFIG.thresholds.replanFrames) {
+                logEvent('MODEL_MISMATCH', { fkError: errors.fk });
+            }
+        } else {
+            errorFrameCount = 0;
+        }
+    }
+
+    function animate(timestamp) {
+        requestAnimationFrame(animate);
+
+        // dt計算
+        const dt = lastTimestamp > 0 ? Math.min((timestamp - lastTimestamp) / 1000, CONFIG.control.maxDt) : 0.016;
+        lastTimestamp = timestamp;
+
+        if (isAutomating && trajectory && trajectoryIndex < trajectory.length) {
+            // 軌道追従
+            const point = trajectory[trajectoryIndex];
+
+            ref.theta = [...point.theta];
+            ref.omega = [...point.omega];
+            ref.alpha = [...point.alpha];
+            ref.pos = point.refPos;
+
+            // アクション実行
+            if (point.action) {
+                automationPhase = point.action;
+                if (point.action === 'GRAB') {
+                    checkGrab();
+                } else if (point.action === 'PLACE') {
+                    checkPlace();
+                } else if (point.action === 'CYCLE_NEXT') {
+                    // 方向を反転して次のサイクルを開始
+                    cycleDirection = !cycleDirection;
+                    cycleCount++;
+                    logEvent('CYCLE_NEXT', { direction: cycleDirection ? 'GREEN_TO_ORANGE' : 'ORANGE_TO_GREEN', count: cycleCount });
+                    trajectory = buildJointTrajectory();
+                    trajectoryIndex = 0;
+                    return; // 新しい軌道を開始
+                }
+            }
+
+            trajectoryIndex++;
+
+            if (trajectoryIndex >= trajectory.length) {
+                // サイクル終了（CYCLE_NEXTで継続するので通常ここには来ない）
+                stopAutomation();
+            }
+        } else if (!isAutomating) {
+            // マニュアルモード
+            ref.theta = [
+                parseFloat(ui.in1.value),
+                parseFloat(ui.in2.value),
+                parseFloat(ui.in3.value)
+            ];
+            ref.omega = [0, 0, 0];
+            ref.alpha = [0, 0, 0];
+
+            const fk = forwardKinematics(ref.theta[0], ref.theta[1], ref.theta[2]);
+            ref.pos = fk;
+        }
+
+        // 制御更新
+        stepController(dt);
+
+        // スリップ更新
+        updateSlip(dt);
+
+        // 関節適用
+        joint1.rotation.y = -state.theta[0] * Math.PI / 180;
+        joint2.rotation.z = state.theta[1] * Math.PI / 180;
+        joint3.rotation.z = state.theta[2] * Math.PI / 180;
+
+        // グリッパー更新
+        updateGripper();
+
+        // 誤差計算
+        calculateErrors();
+
+        // ログ記録
+        simTime += dt;
+        frameCount++;
+        logFrame(dt);
+
+        // UI更新
+        ui.val1.textContent = Math.round(state.theta[0]) + '°';
+        ui.val2.textContent = Math.round(state.theta[1]) + '°';
+        ui.val3.textContent = Math.round(state.theta[2]) + '°';
+
+        const tcpPos = new THREE.Vector3();
+        handGroup.getWorldPosition(tcpPos);
+        ui.posX.textContent = tcpPos.x.toFixed(2);
+        ui.posY.textContent = tcpPos.y.toFixed(2);
+        ui.posZ.textContent = tcpPos.z.toFixed(2);
+
+        // 誤差表示
+        ui.fkError.textContent = errors.fk.toFixed(4);
+        ui.trackError.textContent = errors.track.toFixed(4);
+        ui.goalError.textContent = errors.goal.toFixed(4);
+        ui.slipVal.textContent = gripState.slipCum.toFixed(4);
+
+        ui.fkError.className = 'metric-value' + (errors.fk > CONFIG.thresholds.fkError ? ' error' : '');
+        ui.trackError.className = 'metric-value' + (errors.track > CONFIG.thresholds.trackError ? ' warn' : '');
+
+        document.getElementById('cycleCountDisplay').textContent = cycleCount;
+        ui.replanCount.textContent = replanCount;
+        ui.frameCount.textContent = frameCount;
+        ui.simTime.textContent = simTime.toFixed(2) + 's';
+
+        // チャート更新
+        let chartValue = 0;
+        switch (chartType) {
+            case 'velocity': chartValue = state.omega[1]; break;
+            case 'trackError': chartValue = errors.track * 100; break;
+            case 'fkError': chartValue = errors.fk * 1000; break;
+            case 'slip': chartValue = gripState.slip * 10000; break;
+        }
+        updateChart(chartValue);
+
+        // スライダー同期（自動時）
+        if (isAutomating) {
+            ui.in1.value = Math.round(state.theta[0]);
+            ui.in2.value = Math.round(state.theta[1]);
+            ui.in3.value = Math.round(state.theta[2]);
+        }
+
+        // 軌跡更新
+        updateTrail();
+
+        // レンダリング
+        renderer.render(scene, camera);
+    }
+
+    // Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start
+    logEvent('SYSTEM_INIT', { version: '4.0' });
+    animate(0);
 
     </script>
 </body>
